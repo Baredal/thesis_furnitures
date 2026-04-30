@@ -24,12 +24,16 @@ After running `download_from_hf.py` the following work fully:
 - **Retrieval index rebuild** (`src/retrieval/make_embeddings.py`)
 - **Retraining** (`src/ml/train_v2.ipynb`) — training data is included in the HuggingFace dataset
 
-The following are included for **methodology documentation and reproducibility of the full pipeline**, but require access to the original raw data sources and will not run out of the box:
+The following are included for **methodology documentation**, but require access to the original raw data sources and will not run out of the box:
 
-- `src/data_processing/` — scraping and preprocessing notebooks for DeepFurniture, Sklad Mebliv, and Wayfair; these document exactly how the raw data was collected and normalised into the unified scene format
-- `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction over the raw furniture images (prerequisite for triplet mining from scratch)
-- `src/ml/build_triplets_v2.py` — triplet construction from scratch (the ready triplet CSVs are downloadable from HuggingFace)
+- `src/data_processing/sklad_mebliv/` — scraping and preprocessing for the Sklad Mebliv Ukrainian retailer: downloading product pages, parsing annotations, and normalising into the unified scene format
+- `src/data_processing/deepfurn/process_annotations.ipynb` — annotation processing for DeepFurniture; note that the initial scene extraction and image-level preprocessing scripts are **not included** to avoid confusion with the full DeepFurniture pipeline, which operates on the original dataset from [byliu/DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture)
+- `src/data_processing/total/` — merging all sources into the unified catalog with `general_manifest.json`
+- `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction over raw furniture images (prerequisite for triplet mining from scratch)
+- `src/ml/build_triplets_v2.py` — triplet construction from scratch (ready CSVs are downloadable from HuggingFace)
 - `src/visualization/` — notebooks used to generate thesis figures
+
+**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently and raised licensing concerns. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
 
 ---
 
