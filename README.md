@@ -1,4 +1,4 @@
-# Visual Furnishings Compatibility Learning and Retrieval Using Machine Learning
+# Visual Furnishings Compatibility Search Using Machine Learning
 
 Bachelor's thesis · Ukrainian Catholic University · 2026
 
@@ -33,7 +33,7 @@ The following are included for **methodology documentation**, but require access
 - `src/ml/build_triplets_v2.py` — triplet construction from scratch (ready CSVs are downloadable from HuggingFace)
 - `src/visualization/` — notebooks used to generate thesis figures
 
-**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently and raised licensing concerns. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
+**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently and was bad itself. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
 
 ---
 
@@ -59,12 +59,7 @@ requirements.txt
 
 ## Data
 
-Two room types are covered:
-
-| Room | Sources | Scenes | Furniture items |
-|---|---|---|---|
-| Bedrooms | DeepFurniture, Sklad Mebliv | ~900 | ~3 100 |
-| Living rooms | DeepFurniture | ~880 | ~2 100 |
+Two room types are covered.
 
 Scenes are split into three non-overlapping scene-level sets: **golden** (18 %) reserved for final evaluation only, **train** (70 %), and **val** (12 %) for model selection.
 
