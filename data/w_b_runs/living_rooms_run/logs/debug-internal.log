@@ -1,0 +1,12 @@
+{"time":"2026-04-08T06:47:18.178209363Z","level":"INFO","msg":"stream: starting","core version":"0.25.0"}
+{"time":"2026-04-08T06:47:18.410373253Z","level":"INFO","msg":"stream: created new stream","id":"ttlyjo9s"}
+{"time":"2026-04-08T06:47:18.411114719Z","level":"INFO","msg":"handler: started","stream_id":"ttlyjo9s"}
+{"time":"2026-04-08T06:47:18.4125855Z","level":"INFO","msg":"stream: started","id":"ttlyjo9s"}
+{"time":"2026-04-08T06:47:18.41334368Z","level":"INFO","msg":"writer: started","stream_id":"ttlyjo9s"}
+{"time":"2026-04-08T06:47:18.413369293Z","level":"INFO","msg":"sender: started","stream_id":"ttlyjo9s"}
+{"time":"2026-04-08T12:13:50.062645393Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2026-04-08T12:13:50.274979864Z","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2026-04-08T12:13:50.287202095Z","level":"INFO","msg":"stream: closing","id":"ttlyjo9s"}
+{"time":"2026-04-08T12:13:50.287727866Z","level":"INFO","msg":"handler: closed","stream_id":"ttlyjo9s"}
+{"time":"2026-04-08T12:13:50.287911451Z","level":"INFO","msg":"sender: closed","stream_id":"ttlyjo9s"}
+{"time":"2026-04-08T12:13:50.287955308Z","level":"INFO","msg":"stream: closed","id":"ttlyjo9s"}

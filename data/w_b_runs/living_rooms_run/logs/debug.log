@@ -1,0 +1,47 @@
+2026-04-08 06:47:17,631 INFO    MainThread:3928 [wandb_setup.py:_flush():81] Current SDK version is 0.25.0
+2026-04-08 06:47:17,631 INFO    MainThread:3928 [wandb_setup.py:_flush():81] Configure stats pid to 3928
+2026-04-08 06:47:17,632 INFO    MainThread:3928 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-04-08 06:47:17,632 INFO    MainThread:3928 [wandb_init.py:setup_run_log_directory():717] Logging user logs to /teamspace/studios/this_studio/full_new_thesis_v2/src/ml/wandb/run-20260408_064717-ttlyjo9s/logs/debug.log
+2026-04-08 06:47:17,632 INFO    MainThread:3928 [wandb_init.py:setup_run_log_directory():718] Logging internal logs to /teamspace/studios/this_studio/full_new_thesis_v2/src/ml/wandb/run-20260408_064717-ttlyjo9s/logs/debug-internal.log
+2026-04-08 06:47:17,632 INFO    MainThread:3928 [wandb_init.py:monkeypatch_ipython():636] configuring jupyter hooks <wandb.sdk.wandb_init._WandbInit object at 0x7da3ec958c20>
+2026-04-08 06:47:17,632 INFO    MainThread:3928 [wandb_init.py:init():844] calling init triggers
+2026-04-08 06:47:17,633 INFO    MainThread:3928 [wandb_init.py:init():849] wandb.init called with sweep_config: {}
+config: {'embedding_dim': 128, 'margin': 1, 'epochs': 20, 'batch_size': 64, 'lr': 0.0001, 'weight_decay': 1e-05, 'backbone_lr_factor': 0.1, 'warmup_epochs': 2, 'img_size': 224, 'num_workers': 4, 'plateau_factor': 0.25, 'plateau_patience': 4, 'plateau_min_lr': 1e-06, 'recall_k_values': [1, 2, 3, 4, 5], 'scene_recall_k_values': [5, 10, 15, 20, 25, 30], 'seed': 42, 'room': 'living_rooms', 'split_version': 'v2_golden', '_wandb': {}}
+2026-04-08 06:47:17,633 INFO    MainThread:3928 [wandb_init.py:init():892] starting backend
+2026-04-08 06:47:18,156 INFO    MainThread:3928 [wandb_init.py:init():895] sending inform_init request
+2026-04-08 06:47:18,164 INFO    MainThread:3928 [wandb_init.py:init():903] backend started and connected
+2026-04-08 06:47:18,200 INFO    MainThread:3928 [wandb_run.py:_label_probe_notebook():1333] probe notebook
+2026-04-08 06:47:18,206 INFO    MainThread:3928 [wandb_init.py:init():973] updated telemetry
+2026-04-08 06:47:18,301 INFO    MainThread:3928 [wandb_init.py:init():997] communicating run to backend with 90.0 second timeout
+2026-04-08 06:47:18,821 INFO    MainThread:3928 [wandb_init.py:init():1042] starting run threads in backend
+2026-04-08 06:47:19,013 INFO    MainThread:3928 [wandb_run.py:_console_start():2524] atexit reg
+2026-04-08 06:47:19,013 INFO    MainThread:3928 [wandb_run.py:_redirect():2373] redirect: wrap_raw
+2026-04-08 06:47:19,013 INFO    MainThread:3928 [wandb_run.py:_redirect():2442] Wrapping output streams.
+2026-04-08 06:47:19,013 INFO    MainThread:3928 [wandb_run.py:_redirect():2465] Redirects installed.
+2026-04-08 06:47:19,019 INFO    MainThread:3928 [wandb_init.py:init():1082] run started, returning control to user process
+2026-04-08 06:47:19,022 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 06:47:48,151 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 06:47:48,151 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:08:13,938 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 12:08:48,183 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 12:08:48,183 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:08:49,186 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 12:09:48,194 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 12:09:48,195 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:11:01,795 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 12:11:48,366 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 12:11:48,366 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:11:48,375 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 12:12:48,203 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 12:12:48,204 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:12:50,279 INFO    MainThread:3928 [wandb_init.py:_post_run_cell_hook():606] [no run ID] resuming backend
+2026-04-08 12:13:48,188 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] [no run ID] not saving jupyter notebook
+2026-04-08 12:13:48,189 INFO    MainThread:3928 [wandb_init.py:_pre_run_cell_hook():595] [no run ID] pausing backend
+2026-04-08 12:13:48,190 INFO    MainThread:3928 [wandb_run.py:_finish():2291] finishing run strus-pn-ukrainian-catholic-university/furnishings_compatibility/ttlyjo9s
+2026-04-08 12:13:49,757 INFO    MainThread:3928 [jupyter.py:save_history():435] not saving jupyter history
+2026-04-08 12:13:49,757 INFO    MainThread:3928 [jupyter.py:save_ipynb():362] not saving jupyter notebook
+2026-04-08 12:13:49,757 INFO    MainThread:3928 [wandb_init.py:_jupyter_teardown():621] cleaning up jupyter logic
+2026-04-08 12:13:49,757 INFO    MainThread:3928 [wandb_run.py:_atexit_cleanup():2490] got exitcode: 0
+2026-04-08 12:13:49,758 INFO    MainThread:3928 [wandb_run.py:_restore():2472] restore
+2026-04-08 12:13:49,759 INFO    MainThread:3928 [wandb_run.py:_restore():2478] restore done
+2026-04-08 12:13:50,281 INFO    MainThread:3928 [wandb_run.py:_footer_sync_info():3868] logging synced files

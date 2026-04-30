@@ -1,0 +1,101 @@
+_wandb:
+    value:
+        cli_version: 0.25.0
+        e:
+            nobc1885xow8afqp2tiofvpq90c2rhob:
+                codePath: /teamspace/studios/this_studio/full_new_thesis_v2/src/ml/train_v2.ipynb
+                codePathLocal: train_v2.ipynb
+                cpu_count: 4
+                cpu_count_logical: 8
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "395184570368"
+                        used: "36124327936"
+                email: strus.pn@ucu.edu.ua
+                executable: /home/zeus/miniconda3/envs/cloudspace/bin/python
+                gpu: Tesla T4
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Turing
+                      cudaCores: 2560
+                      memoryTotal: "16106127360"
+                      name: Tesla T4
+                      uuid: GPU-13a708f4-731e-df56-c47b-9b28947c4ab7
+                host: cs-01kn9ee7jqvttpkht98jcwqywa
+                memory:
+                    total: "31538307072"
+                os: Linux-6.8.0-1007-gcp-x86_64-with-glibc2.39
+                program: /teamspace/studios/this_studio/full_new_thesis_v2/src/ml/train_v2.ipynb
+                python: CPython 3.12.11
+                root: /teamspace/studios/this_studio/full_new_thesis_v2/src/ml
+                startedAt: "2026-04-03T11:01:45.981451Z"
+                writerId: nobc1885xow8afqp2tiofvpq90c2rhob
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+                - 41
+            "2":
+                - 1
+                - 41
+            "3":
+                - 2
+                - 13
+                - 15
+                - 16
+                - 61
+            "4": 3.12.11
+            "5": 0.25.0
+            "8":
+                - 1
+            "12": 0.25.0
+            "13": linux-x86_64
+backbone_lr_factor:
+    value: 0.1
+batch_size:
+    value: 64
+embedding_dim:
+    value: 128
+epochs:
+    value: 30
+img_size:
+    value: 224
+lr:
+    value: 0.0001
+margin:
+    value: 1
+num_workers:
+    value: 4
+plateau_factor:
+    value: 0.25
+plateau_min_lr:
+    value: 1e-06
+plateau_patience:
+    value: 4
+recall_k_values:
+    value:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+room:
+    value: bedrooms
+scene_recall_k_values:
+    value:
+        - 5
+        - 10
+        - 15
+        - 20
+        - 25
+        - 30
+seed:
+    value: 42
+split_version:
+    value: v3_golden
+warmup_epochs:
+    value: 2
+weight_decay:
+    value: 1e-05

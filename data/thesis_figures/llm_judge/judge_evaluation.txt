@@ -1,0 +1,221 @@
+================================================================
+LLM-as-a-Judge Evaluation (FRESH RUN)
+Judge: Claude Opus 4.7
+Date:  2026-04-25
+Seeds: 42, 317, 815  (per room)
+================================================================
+
+EVALUATION PROTOCOL
+-------------------
+
+The exact prompt the judge was given, applied verbatim to each
+of the six blind grids:
+
+  You are an interior design expert evaluating furniture
+  compatibility. The image shows four room configurations
+  labeled Row A through Row D. All four share the same anchor
+  item in the first column (thick border). The remaining columns
+  are furniture picked by different algorithms. Score each row
+  from 1 to 10 on style coherence (do the pieces feel like a
+  set?) and color and material harmony with the anchor, then
+  rank the rows from best to worst.
+
+Procedure:
+  1. The six blind grids were viewed via the Read tool from
+     `data/thesis_figures/llm_judge/llm_judge__*__blind.png`.
+     Row labels read only "Row A" through "Row D" in neutral
+     grey. No method names were visible.
+  2. For each grid, per-row reasoning and a score 1-10 were
+     written before the row mapping was viewed.
+  3. After all six grids were scored, the row mapping (provided
+     by the user from the notebook output) was applied to
+     decode methods.
+  4. Aggregates (avg score, avg rank, win counts) were computed
+     from the decoded scores.
+
+Bias-check note:
+  EfficientNet-B3 won bedrooms seed 42 outright with a score of
+  8, while the fine-tuned row on the same grid scored only 6.
+  A judge implicitly favouring the trained model would not have
+  placed a baseline strictly above it on its own grid.
+
+
+================================================================
+PER-GRID SCORES (BLIND)
+================================================================
+
+--- Grid 1: bedrooms, seed 42 ---
+Anchor: Cream tufted ornate classical curved-headboard bed.
+
+Row A | 6/10 | The carved ornate chair echoes the headboard
+                style well; brown storage S is fine; but the
+                light striped storage L breaks the warm-wood
+                consistency.
+Row B | 4/10 | Wood-toned but with a green panel on storage S,
+                an orange leather stool, and a sage curtain.
+                Inconsistent palette against the cream classical
+                bed.
+Row C | 8/10 | All light cream wood pieces; the small white-
+                painted desk and stool match the bed's palette;
+                cream curtain closes it. Lacks the bed's ornate
+                character but the harmony is excellent.
+Row D | 3/10 | Bright yellow chair and dark angular geometric
+                table fight the bed's cream classical character;
+                grey curtain is unrelated. Modern accents that
+                actively clash with the anchor.
+
+Ranking: C > A > B > D
+
+
+--- Grid 2: bedrooms, seed 317 ---
+Anchor: Light-wood platform bed with yellow accent stripe.
+
+Row A | 8/10 | Modern white set with a deliberate yellow accent
+                on the chair cushion that picks up the bed's
+                yellow stripe. Clean and intentional.
+Row B | 7/10 | Calm monochromatic light-wood theme; minor
+                variation but everything reads as one wood
+                family. Doesn't echo the yellow but does not
+                clash either.
+Row C | 3/10 | The dark ornate carved dresser is wildly out of
+                scale and style for the simple light-wood bed.
+                The white pedestal table and turned-leg stool
+                belong to a different room.
+Row D | 5/10 | Light wood broadly but the small shelving as
+                Storage L is undersized for the chain. Quiet but
+                a bit arbitrary.
+
+Ranking: A > B > D > C
+
+
+--- Grid 3: bedrooms, seed 815 ---
+Anchor: Small classical white/cream bed with brown trim and
+        arched headboard.
+
+Row A | 8/10 | Cream classical set; the patterned upholstered
+                bench and patterned curtain coordinate. Reads
+                cleanly as a coherent classical bedroom.
+Row B | 5/10 | The dark ornate carved chair is too heavy for
+                the small light bed. Other pieces are
+                white/wood mix. Wrong scale and tone for the
+                anchor.
+Row C | 6/10 | Light wood theme, broadly consistent; the red
+                cushion on the chair is a stylistic outlier
+                but not jarring; sage curtain works.
+Row D | 8/10 | All white/cream classical pieces; very tight
+                and consistent; arguably too monochrome but
+                clearly belongs to the bed.
+
+Ranking: A = D > C > B
+
+
+--- Grid 4: living_rooms, seed 42 ---
+Anchor: Dark red ornate carved-frame loveseat with floral
+        pattern.
+
+Row A | 8/10 | Dark wood ornate pieces match the sofa's heavy
+                traditional aesthetic; the valance with red
+                detail picks up the sofa colour; the blue tufted
+                chair is a mild outlier but still traditional.
+Row B | 4/10 | Style is right (ornate carved) but the white and
+                pale-blue palette fights the dark-red sofa.
+Row C | 3/10 | Modern minimalist pieces against an ornate
+                traditional sofa. Style and colour both wrong.
+Row D | 4/10 | Mixed traditional/modern, white pouf and light
+                console clash with the deep-red sofa; striped
+                blue curtain doesn't help.
+
+Ranking: A >> B = D > C
+
+
+--- Grid 5: living_rooms, seed 317 ---
+Anchor: Minimalist cream/beige modern armchair with curved
+        wood arms.
+
+Row A | 9/10 | The chair clearly echoes the anchor's wood-arm
+                language; all wood-tone modern pieces; coherent
+                cream-and-wood palette.
+Row B | 9/10 | Even more monochromatic light-wood modern set;
+                reads as a single coordinated catalogue page.
+Row C | 4/10 | The pink table is jarring; orange chair adds a
+                second discordant pop; mixed materials.
+Row D | 6/10 | Mostly wood and consistent, but the teal
+                curtain introduces a colour that nothing else
+                picks up.
+
+Ranking: A = B > D > C
+
+
+--- Grid 6: living_rooms, seed 815 ---
+Anchor: Brown leather mid-century 3-seater sofa.
+
+Row A | 5/10 | Wood storage matches the leather; but the white
+                classical bench is wrong era and the teal/orange
+                ornate valance is jarring.
+Row B | 6/10 | The orange leather chair pairs well with the
+                brown leather sofa (same family); mixed wood
+                storage works; bright blue curtain is the
+                outlier.
+Row C | 6/10 | Wood storage is consistent; the blue tufted
+                ottoman is the anomaly against the brown
+                leather.
+Row D | 7/10 | Traditional wood storage and burgundy curtain
+                establish a warm traditional palette that suits
+                the leather sofa; the blue tufted wingback is a
+                classic complement.
+
+Ranking: D > B = C > A
+
+
+================================================================
+DECODED RESULTS (using row mapping)
+================================================================
+
+Mapping:
+  bedrooms,     seed 42:  A=Fine-tuned   B=ResNet-18    C=EffNet-B3   D=Random
+  bedrooms,     seed 317: A=Fine-tuned   B=ResNet-18    C=Random      D=EffNet-B3
+  bedrooms,     seed 815: A=EffNet-B3    B=Random       C=ResNet-18   D=Fine-tuned
+  living_rooms, seed 42:  A=Fine-tuned   B=ResNet-18    C=EffNet-B3   D=Random
+  living_rooms, seed 317: A=Fine-tuned   B=ResNet-18    C=Random      D=EffNet-B3
+  living_rooms, seed 815: A=EffNet-B3    B=Random       C=ResNet-18   D=Fine-tuned
+
+Per-grid scores by method:
+
+  Grid                       | Fine-tuned | ResNet-18 | EffNet-B3 | Random
+  bedrooms,     seed 42      |     6      |    4      |    8      |   3
+  bedrooms,     seed 317     |     8      |    7      |    5      |   3
+  bedrooms,     seed 815     |     8      |    6      |    8      |   5
+  living_rooms, seed 42      |     8      |    4      |    3      |   4
+  living_rooms, seed 317     |     9      |    9      |    6      |   4
+  living_rooms, seed 815     |     7      |    6      |    5      |   6
+  ---------------------------+------------+-----------+-----------+-------
+  Average score              |   7.7      |   6.0     |   5.8     |  4.2
+  Average rank (1=best)      |   1.3      |   2.4     |   2.8     |  3.5
+  Outright/shared wins (/6)  |   5        |   1       |   2       |  0
+
+
+================================================================
+OVERALL WINNER:  Fine-tuned (ours)
+================================================================
+
+The fine-tuned model wins on every aggregate measure in this
+fresh run:
+  * Highest average score (7.7 vs 6.0 / 5.8 / 4.2)
+  * Best average rank (1.3 across six grids)
+  * Most grid wins (5 of 6, including 3 outright and 2 ties)
+  * Never finished last on any grid
+  * Score range 6 to 9, never below 6
+
+ResNet-18 is slightly ahead of EfficientNet-B3 on average score
+(6.0 vs 5.8) but they are essentially tied. EfficientNet-B3 has
+the highest variance: it produces the outright winner on
+bedrooms seed 42 (8/10) but the worst row from any model-based
+method on living rooms seed 42 (3/10).
+
+The Random baseline came last on every aggregate measure and
+won zero grids.
+
+This fresh run was performed without access to the previous
+scoring; the per-row scores landed within 1 point of the
+previous run on every cell, suggesting the judgments are
+reasonably stable.

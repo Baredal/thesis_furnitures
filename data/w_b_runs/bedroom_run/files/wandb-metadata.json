@@ -1,0 +1,36 @@
+{
+  "os":  "Linux-6.8.0-1007-gcp-x86_64-with-glibc2.39",
+  "python":  "CPython 3.12.11",
+  "startedAt":  "2026-04-03T11:01:45.981451Z",
+  "program":  "/teamspace/studios/this_studio/full_new_thesis_v2/src/ml/train_v2.ipynb",
+  "codePath":  "/teamspace/studios/this_studio/full_new_thesis_v2/src/ml/train_v2.ipynb",
+  "codePathLocal":  "train_v2.ipynb",
+  "email":  "strus.pn@ucu.edu.ua",
+  "root":  "/teamspace/studios/this_studio/full_new_thesis_v2/src/ml",
+  "host":  "cs-01kn9ee7jqvttpkht98jcwqywa",
+  "executable":  "/home/zeus/miniconda3/envs/cloudspace/bin/python",
+  "cpu_count":  4,
+  "cpu_count_logical":  8,
+  "gpu":  "Tesla T4",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "395184570368",
+      "used":  "36124327936"
+    }
+  },
+  "memory":  {
+    "total":  "31538307072"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "Tesla T4",
+      "memoryTotal":  "16106127360",
+      "cudaCores":  2560,
+      "architecture":  "Turing",
+      "uuid":  "GPU-13a708f4-731e-df56-c47b-9b28947c4ab7"
+    }
+  ],
+  "cudaVersion":  "13.0",
+  "writerId":  "nobc1885xow8afqp2tiofvpq90c2rhob"
+}

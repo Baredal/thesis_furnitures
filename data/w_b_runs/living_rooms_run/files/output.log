@@ -1,0 +1,49 @@
+W&B run: https://wandb.ai/strus-pn-ukrainian-catholic-university/furnishings_compatibility/runs/ttlyjo9s
+Epoch  1/20  loss=0.8565  val_acc=0.700  val_loss=0.706 ★ best
+Epoch  2/20  loss=0.6197  val_acc=0.722  val_loss=0.626 ★ best
+Epoch  3/20  loss=0.5337  val_acc=0.738  val_loss=0.601 ★ best
+Epoch  4/20  loss=0.4757  val_acc=0.749  val_loss=0.587 ★ best
+Epoch  5/20  loss=0.4351  val_acc=0.758  val_loss=0.577 ★ best
+Epoch  6/20  loss=0.4012  val_acc=0.759  val_loss=0.577
+Epoch  7/20  loss=0.3711  val_acc=0.754  val_loss=0.578
+Epoch  8/20  loss=0.3487  val_acc=0.749  val_loss=0.591
+Epoch  9/20  loss=0.3277  val_acc=0.755  val_loss=0.580
+Epoch 10/20  loss=0.3074  val_acc=0.756  val_loss=0.583
+Epoch 11/20  loss=0.2895  val_acc=0.758  val_loss=0.575 ★ best
+Epoch 12/20  loss=0.2840  val_acc=0.756  val_loss=0.581
+Epoch 13/20  loss=0.2773  val_acc=0.760  val_loss=0.572 ★ best
+Epoch 14/20  loss=0.2736  val_acc=0.759  val_loss=0.572
+Epoch 15/20  loss=0.2698  val_acc=0.761  val_loss=0.578
+Epoch 16/20  loss=0.2657  val_acc=0.756  val_loss=0.581
+Epoch 17/20  loss=0.2629  val_acc=0.754  val_loss=0.580
+Epoch 18/20  loss=0.2578  val_acc=0.754  val_loss=0.582
+Epoch 19/20  loss=0.2527  val_acc=0.757  val_loss=0.582
+Epoch 20/20  loss=0.2512  val_acc=0.755  val_loss=0.583
+
+Done. Best val_loss=0.5720 at epoch 13
+Loaded best checkpoint from epoch 13
+
+Evaluating best model on val set ...
+Evaluating best model on golden set ...
+==========================================================================================
+Metric                           BL Val    BL Gold     Tr Val    Tr Gold      D Val     D Gold
+------------------------------------------------------------------------------------------
+loss                             0.9780     0.9838     0.5720     0.6267    -0.4060    -0.3571
+triplet_accuracy                 0.5755     0.5516     0.7599     0.7312    +0.1845    +0.1796
+margin_satisfied                 0.0000     0.0000     0.2966     0.2739    +0.2966    +0.2739
+pos_dist_mean                    0.7464     0.7463     0.8856     0.9278    +0.1392    +0.1815
+neg_dist_mean                    0.7684     0.7625     1.4052     1.3867    +0.6368    +0.6243
+dist_gap_mean                    0.0220     0.0162     0.5196     0.4590    +0.4976    +0.4428
+recall@1                         0.2765     0.2546     0.5022     0.4515    +0.2257    +0.1969
+recall@2                         0.4335     0.4108     0.6816     0.6380    +0.2481    +0.2272
+recall@3                         0.5904     0.5522     0.7952     0.7565    +0.2048    +0.2043
+recall@4                         0.7175     0.6921     0.8789     0.8712    +0.1614    +0.1791
+recall@5                         0.8595     0.8483     0.9417     0.9386    +0.0822    +0.0903
+MRR                              0.4909     0.4713     0.6730     0.6367    +0.1821    +0.1653
+scene_recall@5                   0.1951     0.1250     0.2642     0.1491    +0.0691    +0.0241
+scene_recall@10                  0.2642     0.1689     0.3943     0.2588    +0.1301    +0.0899
+scene_recall@15                  0.3049     0.2083     0.4634     0.3311    +0.1585    +0.1228
+scene_recall@20                  0.3496     0.2346     0.5610     0.4145    +0.2114    +0.1798
+scene_recall@25                  0.3821     0.2675     0.6179     0.4561    +0.2358    +0.1886
+scene_recall@30                  0.4187     0.2939     0.6463     0.5022    +0.2276    +0.2083
+==========================================================================================

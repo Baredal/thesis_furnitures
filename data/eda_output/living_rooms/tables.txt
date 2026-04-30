@@ -1,0 +1,39 @@
+
+Table 1 — Furniture items by category and source (living_rooms)
+
+| Category      | deepfurn | Total |
+|---------------|----------|-------|
+| sofa          | 822      | 822   |
+| small_storage | 324      | 324   |
+| large_storage | 294      | 294   |
+| table         | 627      | 627   |
+| chair_stool   | 220      | 220   |
+| curtain       | 222      | 222   |
+| Total         | 2509     | 2509  |
+
+
+Table 2 — Three-way scene split (living_rooms, triplets_v3)
+
+| Split | Scenes | deepfurn |
+|-------|--------|----------|
+| train | 578    | 578      |
+| val   | 78     | 78       |
+| test  | 144    | 144      |
+| Total | 800    |          |
+
+
+Table 3 — Triplet dataset statistics (living_rooms)
+
+| Split | Triplets | Unique items | Unique pairs |
+|-------|----------|--------------|--------------|
+| train | 23055    | 1937         | 4611         |
+| val   | 3345     | 326          | 669          |
+| test  | 6755     | 616          | 1351         |
+
+
+Table 4 — Source-level statistics (living_rooms)
+
+| Source   | Scenes (split) | Items (manifest) | Items/scene |
+|----------|----------------|------------------|-------------|
+| deepfurn | 800            | 2509             | 3.1         |
+

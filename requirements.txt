@@ -1,0 +1,28 @@
+# PyTorch — install the correct CUDA build for your GPU from https://pytorch.org/get-started/locally/
+# Example (CUDA 12.8):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch>=2.0.0
+torchvision>=0.15.0
+
+# App
+streamlit>=1.30.0
+
+# Data / ML
+numpy>=1.24.0
+Pillow>=10.0.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+tqdm>=4.65.0
+
+# HuggingFace (download models + dataset)
+huggingface_hub>=0.20.0
+
+# Training tracking
+wandb>=0.15.0
+python-dotenv>=1.0.0
+
+# Notebooks
+jupyter>=1.0.0
+ipykernel>=6.0.0

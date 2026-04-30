@@ -1,0 +1,40 @@
+
+Table 1 — Furniture items by category and source (bedrooms)
+
+| Category      | deepfurn | sklad_mebliv | Total |
+|---------------|----------|--------------|-------|
+| bed           | 493      | 60           | 553   |
+| small_storage | 573      | 63           | 636   |
+| large_storage | 244      | 124          | 368   |
+| table         | 311      | 6            | 317   |
+| chair_stool   | 357      | -            | 357   |
+| curtain       | 431      | -            | 431   |
+| Total         | 2409     | 253          | 2662  |
+
+
+Table 2 — Three-way scene split (bedrooms, triplets_v3)
+
+| Split | Scenes | deepfurn | sklad_mebliv |
+|-------|--------|----------|--------------|
+| train | 624    | 573      | 51           |
+| val   | 89     | 81       | 8            |
+| test  | 160    | 146      | 14           |
+| Total | 873    |          |              |
+
+
+Table 3 — Triplet dataset statistics (bedrooms)
+
+| Split | Triplets | Unique items | Unique pairs |
+|-------|----------|--------------|--------------|
+| train | 26580    | 2078         | 5316         |
+| val   | 4515     | 403          | 903          |
+| test  | 7825     | 664          | 1565         |
+
+
+Table 4 — Source-level statistics (bedrooms)
+
+| Source       | Scenes (split) | Items (manifest) | Items/scene |
+|--------------|----------------|------------------|-------------|
+| deepfurn     | 800            | 2409             | 3.0         |
+| sklad_mebliv | 73             | 253              | 3.5         |
+
