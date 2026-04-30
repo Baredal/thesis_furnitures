@@ -167,7 +167,7 @@ Pre-generated figures and tables are already committed in `data/eda_output/`.
 
 ```bibtex
 @thesis{Strus2026furniture,
-  title  = {Visual Furnishings Compatibility Learning and Retrieval Using Machine Learning},
+  title  = {Visual Furnishings Compatibility Search Using Machine Learning},
   author = {Yaroslav-Dmytro Strus},
   school = {Ukrainian Catholic University},
   year   = {2026},
