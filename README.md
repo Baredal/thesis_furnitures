@@ -23,7 +23,7 @@ The Streamlit app guides a user through assembling a room step by step.
 3. **Step through the chain** — for bedrooms the order is bed → small storage → large storage → table → chair/stool → curtain; for living rooms it is sofa → table → small storage → large storage → chair/stool → curtain.
 4. **Pick or skip** — at each step five compatible candidates are shown, scored by the hybrid retriever. You can select one, skip the category, or shuffle for five more options.
 5. **Adjust the scoring weight** — a sidebar slider lets you move between "style" (embedding-dominated) and "colour" (histogram-dominated) scoring in real time.
-6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available) and can be reverse-searched via Google Lens. A collage of all selected items can be downloaded as a single JPEG.
+6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available). A collage of all selected items can be downloaded as a single JPEG.
 
 ---
 
