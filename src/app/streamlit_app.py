@@ -3,6 +3,8 @@ import sys
 import random
 from io import BytesIO
 from pathlib import Path
+import requests
+import urllib.parse
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -156,36 +158,42 @@ def img_bytes(path: str) -> bytes:
 
 
 def google_lens_button(image_path: str, key: str) -> None:
-    """Opens Google reverse image search in a new tab by POSTing the image directly."""
-    b64 = img_b64(image_path)
-    safe_key = "".join(c if c.isalnum() else "_" for c in key)
-    html = f"""
-    <style>
-      .lens-btn {{
-        display:block; width:100%; padding:5px 8px;
-        background:#fff; color:#444;
-        border:1px solid #ccc; border-radius:6px;
-        cursor:pointer; font-size:13px; font-family:sans-serif;
-        text-align:center; box-sizing:border-box;
-      }}
-      .lens-btn:hover {{ background:#f0f0f0; }}
-    </style>
-    <form id="lf_{safe_key}" action="https://www.google.com/searchbyimage/upload"
-          method="POST" enctype="multipart/form-data" target="_blank" style="display:none">
-      <input type="file" id="fi_{safe_key}" name="encoded_image" />
-      <input type="hidden" name="hl" value="en" />
-    </form>
-    <button class="lens-btn" onclick="(function(){{
-      var b=atob('{b64}'), n=b.length, u=new Uint8Array(n);
-      for(var i=0;i<n;i++) u[i]=b.charCodeAt(i);
-      var blob=new Blob([u],{{type:'image/jpeg'}});
-      var dt=new DataTransfer();
-      dt.items.add(new File([blob],'img.jpg',{{type:'image/jpeg'}}));
-      document.getElementById('fi_{safe_key}').files=dt.files;
-      document.getElementById('lf_{safe_key}').submit();
-    }})()">🔍 Find similar (Google Lens)</button>
-    """
-    components.html(html, height=38)
+    """Generates a public URL for the local image and passes it to Google Lens."""
+    state_key = f"lens_url_{key}"
+    
+    # If we already generated the link for this specific item, show the 'Open' button
+    if state_key in st.session_state:
+        st.link_button(
+            "🌐 Open in Google Lens", 
+            st.session_state[state_key], 
+            use_container_width=True
+        )
+    else:
+        # Show the 'Generate' button
+        if st.button("🔍 Find similar (Google Lens)", key=f"btn_{key}", use_container_width=True):
+            with st.spinner("Preparing Lens link..."):
+                try:
+                    # Upload to tmpfiles.org (allows Googlebot to fetch the image)
+                    with open(image_path, "rb") as f:
+                        res = requests.post(
+                            "https://tmpfiles.org/api/v1/upload", 
+                            files={"file": f}
+                        )
+                    res.raise_for_status()
+                    
+                    # Convert the viewer URL to a direct raw image download URL
+                    data = res.json()
+                    viewer_url = data["data"]["url"]
+                    public_url = viewer_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                    
+                    # Construct the official Google Lens URL query
+                    lens_url = f"https://lens.google.com/uploadbyurl?url={urllib.parse.quote(public_url)}"
+                    
+                    # Save to session state and reload to show the actual link button
+                    st.session_state[state_key] = lens_url
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to generate link. Error: {e}")
 
 
 def make_collage(items: list[dict], cell_size: int = 300, padding: int = 12,
