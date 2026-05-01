@@ -263,6 +263,8 @@ python src/results/evaluate_hybrid.py
 To reproduce from proccessed data creation triplets (requires processed data), additionally run:
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction for negative mining
 - Per-source notebooks in `src/data_processing/`
+- [Kaggle processed data](https://www.kaggle.com/datasets/darebal/furnishings-dataset)
+- You will have to download, unarchive and move **processed_data** into **data/** folder
 
 Processed is standardised into a unified directory structure regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
 
