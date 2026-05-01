@@ -117,7 +117,7 @@ def show_item_meta(item: dict, room: str = DEFAULT_ROOM):
     scene_path = scene_image_path(item, room)
     if scene_path.exists():
         with st.expander("📷 Original scene"):
-            st.image(str(scene_path), uwidth='stretch')
+            st.image(str(scene_path), width='stretch')
 
 
 def show_progress():
