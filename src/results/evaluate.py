@@ -1,17 +1,7 @@
-"""
-evaluate.py — Test-set evaluation on the golden (test) split for BOTH rooms.
+"""Evaluate triplet and retrieval metrics on the golden split for both rooms.
 
-Models evaluated per room:
-  - ResNet18 pretrained (ImageNet baseline)
-  - EfficientNet-B3 pretrained (ImageNet baseline)
-  - ResNet18 fine-tuned (v3 checkpoint)
-
-Outputs (for each room, prefixed with '{room}_'):
-  - {room}_results.json
-  - {room}_distance_distributions.png
-  - {room}_scene_recall_curves.png
-  - {room}_precision_recall_curves.png
-  - {room}_key_metrics_comparison.png
+Models compared: ResNet18 (ImageNet baseline), EfficientNet-B3 (ImageNet baseline),
+ResNet18 fine-tuned.
 
 Usage:
     python src/results/evaluate.py
@@ -65,15 +55,10 @@ COLORS = ["#4c72b0", "#c44e52", "#55a868"]
 
 
 def _pretty_cat(cat: str) -> str:
-    """Display helper: merge small_storage/large_storage under one label."""
     if cat in ("small_storage", "large_storage"):
         return "storage"
     return cat
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Data
-# ═══════════════════════════════════════════════════════════════════════════════
 
 val_tf = transforms.Compose([
     transforms.ToTensor(),
@@ -134,10 +119,6 @@ def load_golden_gallery(triplet_dir: Path, image_dir: Path):
     return item_list, item_to_scene, scene_to_items
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Model loading
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def build_models_cfg(room: str) -> dict:
     model_dir = BASE_DIR / "data" / "ml_data" / room / "models"
     return {
@@ -147,7 +128,7 @@ def build_models_cfg(room: str) -> dict:
         "EfficientNet-B3 pretrained": {
             "cls": SiameseEfficientNetB3, "checkpoint": None, "emb_dim": 128,
         },
-        "ResNet18 fine-tuned (v3)": {
+        "ResNet18 fine-tuned": {
             "cls":        SiameseResnet18,
             "checkpoint": model_dir / CHECKPOINTS[room],
             "emb_dim":    None,
@@ -167,10 +148,6 @@ def load_model(cfg: dict) -> nn.Module:
         print(f"    Loaded epoch {ckpt['epoch']}, val_loss={ckpt.get('val_loss', '?'):.4f}")
     return model.to(DEVICE).eval()
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Metrics
-# ═══════════════════════════════════════════════════════════════════════════════
 
 criterion = nn.TripletMarginLoss(margin=MARGIN, p=2)
 
@@ -332,10 +309,6 @@ def precision_recall_at_k(item_to_emb, item_to_scene, scene_to_items, k_values):
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Plots  (simplified: no bar annotations, concise titles)
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def plot_distance_distributions(pos_neg_dists, out_path: Path):
     n_models = len(pos_neg_dists)
     fig, axes = plt.subplots(1, n_models, figsize=(5 * n_models, 4), sharey=True)
@@ -413,10 +386,6 @@ def plot_key_metrics(all_results, out_path: Path):
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Run for one room
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def print_section(title, keys, all_results, model_names):
     col_w = max(len(k) for k in keys) + 2

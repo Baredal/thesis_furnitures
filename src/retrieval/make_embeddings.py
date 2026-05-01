@@ -16,7 +16,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ROOMS_TO_PROCESS = ["bedrooms", "living_rooms"]
 
-# v3 checkpoints produced by train_v2.ipynb
 CHECKPOINT_NAMES = {
     "bedrooms":     "v3/best_model_v3_resnet18_new_data.pt",
     "living_rooms": "v3/best_model_v3_resnet18_liv_rooms.pt",

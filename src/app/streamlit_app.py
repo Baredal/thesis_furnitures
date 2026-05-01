@@ -31,14 +31,10 @@ STEP_LABELS = {
     "curtain":       "🪟  Curtain",
 }
 
-# ── Load retriever once per room ──────────────────────────────────────────────
-
 @st.cache_resource(show_spinner="Loading retrieval model...")
 def load_retriever(room: str) -> FurnitureRetriever:
     return FurnitureRetriever(room=room, embed_weight=0.8, hist_weight=0.2)
 
-
-# ── Session state helpers ─────────────────────────────────────────────────────
 
 def reset():
     """Clear furniture selection but keep room choice."""
@@ -94,8 +90,6 @@ def advance(retriever: FurnitureRetriever):
         )
 
 
-# ── State transitions ─────────────────────────────────────────────────────────
-
 def pick(item: dict, retriever: FurnitureRetriever):
     st.session_state.selected.append(item)
     st.session_state.exclude.add(item["furniture_id"])
@@ -108,8 +102,6 @@ def skip(cat: str, retriever: FurnitureRetriever):
     advance(retriever)
     st.rerun()
 
-
-# ── Page layout ───────────────────────────────────────────────────────────────
 
 def scene_image_path(item: dict, room: str) -> Path:
     return (BASE_DIR / "data" / "processed_data" / room
@@ -368,8 +360,6 @@ def show_final_room():
             st.rerun()
 
 
-# ── Upload anchor section ─────────────────────────────────────────────────────
-
 def show_upload_section(retriever: FurnitureRetriever, chain: list[str]):
     """Optional expander at step 0 — lets user seed the chain with their own photo."""
     with st.expander("📷 Start with your own photo (optional)"):
@@ -419,8 +409,6 @@ def show_upload_section(retriever: FurnitureRetriever, chain: list[str]):
                 st.rerun()
 
 
-# ── Room selection screen ─────────────────────────────────────────────────────
-
 def show_room_selection():
     st.title("🛋️ Room Constructor")
     st.markdown("### Choose a room type to get started")
@@ -435,8 +423,6 @@ def show_room_selection():
                 reset()
                 st.rerun()
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(page_title="Room Constructor", layout="wide",

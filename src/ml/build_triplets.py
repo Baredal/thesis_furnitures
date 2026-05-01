@@ -1,34 +1,23 @@
 """
-build_triplets.py — Construct triplet-loss training data for furniture compatibility.
+Triplet construction for furniture compatibility training.
 
 Triplet structure:
-  Anchor:   furniture item from a scene
-  Positive: different-category item from the SAME scene (compatible pair)
+  Anchor:   item from a scene
+  Positive: different-category item from the SAME scene
   Negative: same category as positive, from a DIFFERENT scene,
-            selected by dual cosine-distance criterion
+            scored by dual cosine-distance criterion
 
-Negative selection strategy:
-  1. Candidate must be the same category as the positive
-  2. Candidate must NOT share ANY scene with anchor or positive
-     (same item can appear in multiple scenes → all are excluded)
-  3. Scored by dual criterion:
-       combined = cos_dist(positive, negative)
-                + cos_dist(anchor, closest_anchor-cat_counterpart_in_neg_scene)
-     This ensures the negative is genuinely different from the positive AND comes from
-     a stylistically different room (anchor counterpart is also different).
-  4. Selected from the [50th, 95th] percentile of combined scores
-     (moderately-to-very different, excluding extreme outliers)
-  5. Balanced across source scenes using per-scene quotas
+Negative scoring:
+  combined = cos_dist(positive, negative)
+           + cos_dist(anchor, closest_anchor-cat_item_in_neg_scene)
+  Selected from [50th, 95th] percentile — moderately hard, no extreme outliers.
+  5 negatives per anchor-positive pair, balanced across source scenes.
 
-Pair deduplication:
-  (bed, nightstand) and (nightstand, bed) are the same pair — kept only once
-  via canonical ordering (anchor_category < positive_category alphabetically).
-  If the exact same two items co-occur in multiple scenes, only one pair is emitted.
+Pair deduplication: canonical category ordering so (bed, nightstand) and
+(nightstand, bed) are the same pair. Cross-scene duplicates removed.
 
-Train/test split:
-  - Scene-level split (no furniture leakage)
-  - Stratified by category composition for diverse test coverage
-  - ~15% scenes reserved for test
+Scene split: golden/train/val (18% / ~70% / 12%), balanced per source.
+Golden set is reserved for final evaluation — never used during training.
 
 Usage:
   python src/ml/build_triplets.py
@@ -48,29 +37,28 @@ from collections import defaultdict, Counter
 from itertools import combinations
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Configuration
-# ═════════════════════════════════════════════════════════════════════════════
-
 BASE_DIR = Path(__file__).resolve().parents[2]
 ROOMS_TO_PROCESS = ["bedrooms", "living_rooms"]
 
-TEST_RATIO = 0.15
 NUM_NEGATIVES_PER_PAIR = 5
 RANDOM_SEED = 42
 
-# Percentile window for "relatively different" negatives.
-# 50–95 means: upper half of distance distribution, minus top-5% outliers.
+# percentile window for negative difficulty: upper half, minus top-5% outliers
 NEG_PERCENTILE_LOW = 50
 NEG_PERCENTILE_HIGH = 95
 
+GOLDEN_FRAC = 0.18   # reserved for final evaluation only — never touched during training
+VAL_FRAC    = 0.12   # used for model selection
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Distance
-# ═════════════════════════════════════════════════════════════════════════════
+TRIPLET_FIELDS = [
+    "anchor_id", "anchor_category", "anchor_scene", "anchor_source",
+    "positive_id", "positive_category", "positive_scene", "positive_source",
+    "negative_id", "negative_category", "negative_scene", "negative_source",
+    "pos_neg_distance", "anchor_counterpart_distance", "combined_distance",
+]
+
 
 def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
-    """1 - cosine_similarity.  Range [0, 1] for non-negative (ReLU) features."""
     dot = np.dot(a, b)
     na = np.linalg.norm(a)
     nb = np.linalg.norm(b)
@@ -79,22 +67,14 @@ def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
     return float(1.0 - dot / (na * nb))
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Data loading
-# ═════════════════════════════════════════════════════════════════════════════
-
 def load_embeddings(path: Path):
     """
-    Load the nested embeddings JSON.  The same furniture_id can appear in
-    multiple scenes — we keep ONE item per furniture_id but track ALL scenes
-    it belongs to in item["scenes"] (set).
+    Load furniture embeddings JSON. The same furniture_id can appear in multiple scenes —
+    kept once with all scene membership tracked in item["scenes"].
 
-    Returns:
-      all_items         — furniture_id → item dict  (with "scenes": set)
-      scene_to_items    — scene_name   → [item, …]  (items are shared objects)
-      category_to_items — category     → [item, …]  (unique by furniture_id)
+    Returns: all_items (id→dict), scene_to_items (scene→list), category_to_items (cat→list)
     """
-    print(f"  Reading {path.name} …")
+    print(f"  Reading {path.name} ...")
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
 
@@ -105,7 +85,6 @@ def load_embeddings(path: Path):
         for scene_name, furnitures in scenes.items():
             for furn_id, furn_data in furnitures.items():
                 if furn_id in all_items:
-                    # Same furniture appearing in another scene — just add scene
                     all_items[furn_id]["scenes"].add(scene_name)
                     multi_scene_count += 1
                 else:
@@ -123,13 +102,11 @@ def load_embeddings(path: Path):
         print(f"  {multi_items} items appear in multiple scenes "
               f"({multi_scene_count} extra scene-links)")
 
-    # Build scene → items  (each item may appear in several scene lists)
     scene_to_items: dict[str, list] = defaultdict(list)
     for item in all_items.values():
         for scene in item["scenes"]:
             scene_to_items[scene].append(item)
 
-    # Build category → items  (one entry per unique furniture_id)
     category_to_items: dict[str, list] = defaultdict(list)
     for item in all_items.values():
         category_to_items[item["category"]].append(item)
@@ -137,64 +114,18 @@ def load_embeddings(path: Path):
     return all_items, dict(scene_to_items), dict(category_to_items)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Train / test split
-# ═════════════════════════════════════════════════════════════════════════════
-
 def _scene_source(scene_name: str) -> str:
-    """Extract data source from scene name (e.g. 'deepfurn_0042' → 'deepfurn')."""
-    for prefix in ("deepfurn", "sklad_mebliv", "wayfair"): # It will match whatever
+    for prefix in ("deepfurn", "sklad_mebliv", "wayfair"):  # will match whatever is found
         if scene_name.startswith(prefix):
             return prefix
     return "unknown"
 
 
-def split_train_test(scene_to_items: dict, test_ratio: float, seed: int):
-    """
-    Scene-level stratified split, balanced across data sources.
-
-    Scenes are grouped by (source, category-set). Within each group,
-    ~test_ratio scenes are sampled for test. This guarantees:
-      1) ~15% from each source (deepfurn, wayfair, sklad_mebliv)
-      2) Diverse category coverage within each source
-      3) No furniture leakage (scene-level split)
-    """
-    rng = random.Random(seed)
-
-    # Group by (source, category-set)
-    groups: dict[tuple[str, frozenset], list[str]] = defaultdict(list)
-    for scene_name, items in scene_to_items.items():
-        source = _scene_source(scene_name)
-        cat_set = frozenset(it["category"] for it in items)
-        groups[(source, cat_set)].append(scene_name)
-
-    train_scenes: set[str] = set()
-    test_scenes: set[str] = set()
-
-    # Process largest groups first for more stable splits
-    for key, scenes in sorted(groups.items(), key=lambda x: -len(x[1])):
-        rng.shuffle(scenes)
-        n_test = max(1, round(len(scenes) * test_ratio))
-        if len(scenes) == 1:
-            train_scenes.add(scenes[0])
-            continue
-        test_scenes.update(scenes[:n_test])
-        train_scenes.update(scenes[n_test:])
-
-    return train_scenes, test_scenes
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Anchor-positive pair generation
-# ═════════════════════════════════════════════════════════════════════════════
-
 def generate_pairs(scene_to_items: dict, eligible_scenes: set):
     """
-    For each eligible scene, enumerate all item pairs with DIFFERENT categories.
-    Canonical order: category(anchor) < category(positive) alphabetically.
-
-    Deduplication: if the exact same (anchor_id, positive_id) co-occur in
-    multiple scenes, only the first-encountered pair is kept.
+    Enumerate all cross-category item pairs within each eligible scene.
+    Canonical ordering (anchor_cat < positive_cat alphabetically) deduplicates
+    reversed pairs. Same item pair co-occurring in multiple scenes is kept once.
     """
     pairs = []
     seen: set[tuple[str, str]] = set()
@@ -227,10 +158,6 @@ def generate_pairs(scene_to_items: dict, eligible_scenes: set):
     return pairs
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Negative selection
-# ═════════════════════════════════════════════════════════════════════════════
-
 def select_negatives(
     pairs: list,
     scene_to_items: dict,
@@ -242,28 +169,22 @@ def select_negatives(
     seed: int,
 ):
     """
-    For every (anchor, positive, pair_scene) triple, select up to
-    `num_negatives` negatives.
+    For each (anchor, positive) pair, select up to num_negatives negatives.
 
-    Scoring (dual cosine distance):
+    Scoring:
       combined = cos_dist(positive, negative)
-               + cos_dist(anchor, best_anchor-cat_counterpart_in_neg_scene)
-
-    CRITICAL: a candidate is excluded if it shares ANY scene with the anchor
-    or positive (prevents false negatives from shared-room items).
-
+               + cos_dist(anchor, closest_same-cat_item_in_neg_scene)
     Selection window: [pctile_low, pctile_high] of sorted combined scores.
-    Balance: per-scene quota caps how many times any single scene provides negatives.
+    Balance: per-scene quota prevents any single scene from dominating.
     """
     rng = random.Random(seed)
 
-    # Fast look-up: scene → category → [items]
+    # fast lookup: scene → category → items
     scene_cat_idx: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for sn in split_scenes:
         for it in scene_to_items.get(sn, []):
             scene_cat_idx[sn][it["category"]].append(it)
 
-    # Scene-balance tracking
     scene_neg_count: Counter = Counter()
     total_neg_needed = len(pairs) * num_negatives
     avg_per_scene = total_neg_needed / max(len(split_scenes), 1)
@@ -272,7 +193,7 @@ def select_negatives(
     triplets: list[dict] = []
     skipped = 0
 
-    # Randomise processing order so no systematic scene-bias
+    # shuffle pair order to avoid systematic scene bias
     pair_order = list(range(len(pairs)))
     rng.shuffle(pair_order)
 
@@ -283,32 +204,27 @@ def select_negatives(
         anchor_emb = anchor["embedding"]
         pos_emb = positive["embedding"]
 
-        # ALL scenes where anchor OR positive appear — these are excluded
+        # exclude all scenes where anchor or positive appear
         excluded_scenes = anchor["scenes"] | positive["scenes"]
 
-        # ── gather candidates ──
         cands_with_cp: list[dict] = []
         cands_no_cp: list[dict] = []
 
         for neg_item in category_to_items.get(pos_cat, []):
-            # Skip if negative shares ANY scene with anchor/positive
             if neg_item["scenes"] & excluded_scenes:
                 continue
-            # Skip if negative has no scenes in this split
             neg_valid_scenes = neg_item["scenes"] & split_scenes
             if not neg_valid_scenes:
                 continue
 
             d_pos_neg = cosine_distance(pos_emb, neg_item["embedding"])
 
-            # Counterpart check: across ALL valid scenes of the negative,
-            # find the closest anchor-category counterpart.
             best_cp_dist = None
             best_cp_scene = None
             for ns in neg_valid_scenes:
                 for cp in scene_cat_idx[ns].get(anchor_cat, []):
                     if cp["furniture_id"] == anchor["furniture_id"]:
-                        continue  # should not happen (excluded) but guard
+                        continue
                     d = cosine_distance(anchor_emb, cp["embedding"])
                     if best_cp_dist is None or d < best_cp_dist:
                         best_cp_dist = d
@@ -323,7 +239,6 @@ def select_negatives(
                     "combined": d_pos_neg + best_cp_dist,
                 })
             else:
-                # No anchor-category counterpart in any of negative's scenes
                 cands_no_cp.append({
                     "neg_item": neg_item,
                     "neg_scene": sorted(neg_valid_scenes)[0],
@@ -332,7 +247,7 @@ def select_negatives(
                     "combined": None,
                 })
 
-        # Fill missing counterpart distances with median from known ones
+        # fill missing counterpart distances with median so they can be ranked
         if cands_with_cp:
             median_cp = float(np.median([c["d_anchor_cp"] for c in cands_with_cp]))
         else:
@@ -346,7 +261,6 @@ def select_negatives(
             skipped += 1
             continue
 
-        # ── percentile window ──
         all_cands.sort(key=lambda c: c["combined"])
         n = len(all_cands)
         lo = int(n * pctile_low / 100)
@@ -355,7 +269,6 @@ def select_negatives(
         if not eligible:
             eligible = all_cands
 
-        # ── balanced selection ──
         rng.shuffle(eligible)
         eligible.sort(key=lambda c: scene_neg_count[c["neg_scene"]])
 
@@ -363,7 +276,7 @@ def select_negatives(
         selected_ids: set[str] = set()
         used_scenes: set[str] = set()
 
-        # Pass 1: one negative per scene, respect quota
+        # pass 1: one negative per scene, respect quota
         for cand in eligible:
             if len(selected) >= num_negatives:
                 break
@@ -375,7 +288,7 @@ def select_negatives(
                 used_scenes.add(ns)
                 scene_neg_count[ns] += 1
 
-        # Pass 2: relax scene-uniqueness if still short
+        # pass 2: relax scene-uniqueness if still short
         if len(selected) < num_negatives:
             for cand in eligible:
                 if len(selected) >= num_negatives:
@@ -386,7 +299,6 @@ def select_negatives(
                     selected_ids.add(nid)
                     scene_neg_count[cand["neg_scene"]] += 1
 
-        # ── emit triplets ──
         for neg in selected:
             triplets.append({
                 "anchor_id": anchor["furniture_id"],
@@ -409,65 +321,8 @@ def select_negatives(
     return triplets, skipped, dict(scene_neg_count)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Output
-# ═════════════════════════════════════════════════════════════════════════════
-
-TRIPLET_FIELDS = [
-    "anchor_id", "anchor_category", "anchor_scene", "anchor_source",
-    "positive_id", "positive_category", "positive_scene", "positive_source",
-    "negative_id", "negative_category", "negative_scene", "negative_source",
-    "pos_neg_distance", "anchor_counterpart_distance", "combined_distance",
-]
-
-
-def save_outputs(
-    train_triplets, test_triplets, train_scenes, test_scenes, output_dir, metadata
-):
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # ── JSON (complete, self-contained) ──
-    with open(output_dir / "triplets.json", "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "metadata": metadata,
-                "train_scenes": sorted(train_scenes),
-                "test_scenes": sorted(test_scenes),
-                "train_triplets": train_triplets,
-                "test_triplets": test_triplets,
-            },
-            f,
-            indent=2,
-        )
-
-    # ── CSV (flat, easy to load with pandas for remote training) ──
-    for name, data in [
-        ("train_triplets.csv", train_triplets),
-        ("test_triplets.csv", test_triplets),
-    ]:
-        with open(output_dir / name, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=TRIPLET_FIELDS)
-            writer.writeheader()
-            writer.writerows(data)
-
-    # ── Scene split (standalone, small) ──
-    with open(output_dir / "scene_split.json", "w", encoding="utf-8") as f:
-        json.dump(
-            {"train_scenes": sorted(train_scenes), "test_scenes": sorted(test_scenes)},
-            f,
-            indent=2,
-        )
-
-
 def export_embedding_matrix(all_items: dict, output_dir: Path):
-    """
-    Export embeddings as a compact .npz matrix + a JSON id→index mapping.
-    Much faster to load during training than the original 50 MB+ JSON.
-
-    Files produced:
-      embeddings.npz        — numpy array  shape (N, 2048)
-      embedding_index.json  — {"id_to_index": {furn_id: row}, …}
-    """
+    """Export embeddings as .npz matrix + JSON id→index mapping."""
     output_dir.mkdir(parents=True, exist_ok=True)
     furn_ids = sorted(all_items.keys())
     id_to_idx = {fid: i for i, fid in enumerate(furn_ids)}
@@ -488,12 +343,7 @@ def export_embedding_matrix(all_items: dict, output_dir: Path):
 
 
 def export_triplet_npy(triplets: list[dict], all_items: dict, output_path: Path):
-    """
-    Save triplets as a (T, 3) int32 numpy array of embedding-matrix indices.
-    Column order: [anchor_idx, positive_idx, negative_idx].
-    Load with: indices = np.load('train_triplet_indices.npy').
-    """
-    # Build furniture_id → row-index (same order as export_embedding_matrix)
+    """Save triplets as (T, 3) int32 array of embedding-matrix row indices."""
     furn_ids = sorted(all_items.keys())
     id_to_idx = {fid: i for i, fid in enumerate(furn_ids)}
 
@@ -507,140 +357,229 @@ def export_triplet_npy(triplets: list[dict], all_items: dict, output_path: Path)
     return indices.shape
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# Visualizations
-# ═════════════════════════════════════════════════════════════════════════════
+_SPLIT_COLORS = {"train": "#4c72b0", "val": "#55a868", "golden": "#c44e52"}
 
-def plot_visualizations(
-    train_triplets, test_triplets,
-    train_scenes, test_scenes,
-    scene_to_items, train_sc, test_sc,
-    output_dir,
-):
-    """Generate and save diagnostic plots."""
+
+def split_golden_train_val(scene_to_items, golden_frac, val_frac, seed):
+    """
+    Three-way scene-level split, balanced per source.
+    golden_frac of each source goes to golden first, then val_frac of the remainder.
+    Returns (golden_scenes, train_scenes, val_scenes).
+    """
+    rng = random.Random(seed)
+
+    groups: dict[tuple[str, frozenset], list[str]] = defaultdict(list)
+    for scene_name, items in scene_to_items.items():
+        source = _scene_source(scene_name)
+        cat_set = frozenset(it["category"] for it in items)
+        groups[(source, cat_set)].append(scene_name)
+
+    golden_scenes: set[str] = set()
+    val_scenes: set[str] = set()
+    train_scenes: set[str] = set()
+
+    for (source, cat_set), scenes in sorted(groups.items(), key=lambda x: -len(x[1])):
+        rng.shuffle(scenes)
+
+        if len(scenes) == 1:
+            train_scenes.add(scenes[0])
+            continue
+
+        n_golden = max(1, round(len(scenes) * golden_frac))
+        n_golden = min(n_golden, len(scenes) - 1)
+
+        golden_part = scenes[:n_golden]
+        rest = scenes[n_golden:]
+
+        n_val = max(1, round(len(rest) * val_frac)) if len(rest) > 1 else 0
+        val_part = rest[:n_val]
+        train_part = rest[n_val:]
+
+        golden_scenes.update(golden_part)
+        val_scenes.update(val_part)
+        train_scenes.update(train_part)
+
+    return golden_scenes, train_scenes, val_scenes
+
+
+def _save_triplets(train_triplets, val_triplets, golden_triplets,
+                   golden_scenes, train_scenes, val_scenes,
+                   output_dir, metadata):
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(output_dir / "triplets.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "metadata": metadata,
+            "golden_scenes": sorted(golden_scenes),
+            "train_scenes": sorted(train_scenes),
+            "val_scenes": sorted(val_scenes),
+            "train_triplets": train_triplets,
+            "val_triplets": val_triplets,
+            "golden_triplets": golden_triplets,
+        }, f, indent=2)
+
+    for name, data in [
+        ("train_triplets.csv", train_triplets),
+        ("val_triplets.csv", val_triplets),
+        ("golden_triplets.csv", golden_triplets),
+    ]:
+        with open(output_dir / name, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=TRIPLET_FIELDS)
+            writer.writeheader()
+            writer.writerows(data)
+
+    with open(output_dir / "scene_split.json", "w", encoding="utf-8") as f:
+        json.dump({
+            "golden_scenes": sorted(golden_scenes),
+            "train_scenes": sorted(train_scenes),
+            "val_scenes": sorted(val_scenes),
+        }, f, indent=2)
+
+
+def _plot_triplets(train_triplets, val_triplets, golden_triplets,
+                   train_scenes, val_scenes, golden_scenes,
+                   scene_to_items, train_sc, val_sc, golden_sc,
+                   output_dir):
     fig_dir = output_dir / "figures"
-    fig_dir.mkdir(exist_ok=True)
+    fig_dir.mkdir(parents=True, exist_ok=True)
 
-    sources = list(set(_scene_source(s) for s in train_scenes | test_scenes))
+    all_scenes = train_scenes | val_scenes | golden_scenes
+    sources = sorted(set(_scene_source(s) for s in all_scenes))
     categories = sorted({it["category"] for items in scene_to_items.values() for it in items})
+    splits = [("train", train_scenes), ("val", val_scenes), ("golden", golden_scenes)]
+    split_triplets = {"train": train_triplets, "val": val_triplets, "golden": golden_triplets}
+    split_sc = {"train": train_sc, "val": val_sc, "golden": golden_sc}
 
-    # ─── 1. Source distribution: train vs test scenes ─────────────────────
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    for ax, (label, ss) in zip(axes, [("Train", train_scenes), ("Test", test_scenes)]):
-        src_counts = Counter(_scene_source(s) for s in ss)
-        vals = [src_counts.get(s, 0) for s in sources]
-        bars = ax.bar(sources, vals, color=["#4c72b0", "#55a868", "#c44e52"])
-        ax.set_title(f"{label} scenes by source")
-        ax.set_ylabel("Scenes")
-        for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.5, str(v),
-                    ha="center", va="bottom", fontsize=10)
+    src_color_map = {s: c for s, c in zip(sources, ["#4c72b0", "#55a868", "#c44e52", "#8172b2"])}
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(sources))
+    width = 0.25
+    for i, (split_name, ss) in enumerate(splits):
+        counts = [sum(1 for sc in ss if _scene_source(sc) == src) for src in sources]
+        bars = ax.bar(x + i * width, counts, width, label=split_name,
+                      color=_SPLIT_COLORS[split_name])
+        for bar, v in zip(bars, counts):
+            if v > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, v + 0.3, str(v),
+                        ha="center", va="bottom", fontsize=9)
+    ax.set_xticks(x + width)
+    ax.set_xticklabels(sources)
+    ax.set_ylabel("Scenes")
+    ax.set_title(f"Three-way scene split per source  (golden={GOLDEN_FRAC:.0%}, val={VAL_FRAC:.0%})")
+    ax.legend()
     fig.tight_layout()
-    fig.savefig(fig_dir / "01_source_distribution.png", dpi=150)
+    fig.savefig(fig_dir / "01_threeway_split_by_source.png", dpi=150)
     plt.close(fig)
 
-    # ─── 2. Category distribution: train vs test items ────────────────────
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    for ax, (label, ss) in zip(axes, [("Train", train_scenes), ("Test", test_scenes)]):
-        cc = Counter()
-        for s in ss:
-            for it in scene_to_items[s]:
-                cc[it["category"]] += 1
+    triplet_counts = [len(t) for _, t in
+                      [("train", train_triplets), ("val", val_triplets), ("golden", golden_triplets)]]
+    split_labels = ["train", "val", "golden"]
+    fig, ax = plt.subplots(figsize=(8, 5))
+    bars = ax.bar(split_labels, triplet_counts,
+                  color=[_SPLIT_COLORS[s] for s in split_labels])
+    for bar, v in zip(bars, triplet_counts):
+        ax.text(bar.get_x() + bar.get_width() / 2, v + max(triplet_counts) * 0.01,
+                f"{v:,}", ha="center", va="bottom", fontsize=10)
+    ax.set_ylabel("Triplets")
+    ax.set_title("Triplet counts per split")
+    fig.tight_layout()
+    fig.savefig(fig_dir / "02_triplet_counts.png", dpi=150)
+    plt.close(fig)
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=False)
+    for ax, (split_name, ss) in zip(axes, splits):
+        cc = Counter(it["category"] for s in ss for it in scene_to_items[s])
         vals = [cc.get(c, 0) for c in categories]
-        bars = ax.bar(categories, vals, color="#4c72b0")
-        ax.set_title(f"{label} items by category")
+        bars = ax.bar(categories, vals, color=_SPLIT_COLORS[split_name])
+        ax.set_title(f"{split_name} — items by category")
         ax.set_ylabel("Items")
-        ax.tick_params(axis="x", rotation=30)
+        ax.tick_params(axis="x", rotation=35)
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.5, str(v),
-                    ha="center", va="bottom", fontsize=9)
+            ax.text(bar.get_x() + bar.get_width() / 2, v + 0.3, str(v),
+                    ha="center", va="bottom", fontsize=8)
+    fig.suptitle("Category distribution per split", fontsize=13)
     fig.tight_layout()
-    fig.savefig(fig_dir / "02_category_distribution.png", dpi=150)
+    fig.savefig(fig_dir / "03_category_distribution.png", dpi=150)
     plt.close(fig)
 
-    # ─── 3. Pair-category heatmap (train) ─────────────────────────────────
-    pair_counts = Counter(
-        (t["anchor_category"], t["positive_category"]) for t in train_triplets
-    )
-    mat = np.zeros((len(categories), len(categories)))
-    for (ac, pc), cnt in pair_counts.items():
-        i, j = categories.index(ac), categories.index(pc)
-        mat[i, j] = cnt
-        mat[j, i] = cnt  # symmetric display
-    fig, ax = plt.subplots(figsize=(8, 7))
-    im = ax.imshow(mat, cmap="YlOrRd")
-    ax.set_xticks(range(len(categories)))
-    ax.set_yticks(range(len(categories)))
-    ax.set_xticklabels(categories, rotation=45, ha="right")
-    ax.set_yticklabels(categories)
-    ax.set_title("Train triplets: anchor–positive category pairs")
-    for i in range(len(categories)):
-        for j in range(len(categories)):
-            if mat[i, j] > 0:
-                ax.text(j, i, f"{int(mat[i, j])}", ha="center", va="center",
-                        fontsize=8, color="white" if mat[i, j] > mat.max() * 0.6 else "black")
-    fig.colorbar(im, ax=ax, shrink=0.8)
-    fig.tight_layout()
-    fig.savefig(fig_dir / "03_pair_category_heatmap.png", dpi=150)
-    plt.close(fig)
+    for split_name, triplets in [("train", train_triplets), ("golden", golden_triplets)]:
+        if not triplets:
+            continue
+        pair_counts = Counter(
+            (t["anchor_category"], t["positive_category"]) for t in triplets
+        )
+        mat = np.zeros((len(categories), len(categories)))
+        for (ac, pc), cnt in pair_counts.items():
+            if ac in categories and pc in categories:
+                i, j = categories.index(ac), categories.index(pc)
+                mat[i, j] = cnt
+                mat[j, i] = cnt
+        fig, ax = plt.subplots(figsize=(8, 7))
+        im = ax.imshow(mat, cmap="YlOrRd")
+        ax.set_xticks(range(len(categories)))
+        ax.set_yticks(range(len(categories)))
+        ax.set_xticklabels(categories, rotation=45, ha="right")
+        ax.set_yticklabels(categories)
+        ax.set_title(f"{split_name} triplets: anchor–positive category pairs")
+        for i in range(len(categories)):
+            for j in range(len(categories)):
+                if mat[i, j] > 0:
+                    ax.text(j, i, f"{int(mat[i, j])}", ha="center", va="center",
+                            fontsize=8,
+                            color="white" if mat[i, j] > mat.max() * 0.6 else "black")
+        fig.colorbar(im, ax=ax, shrink=0.8)
+        fig.tight_layout()
+        fig.savefig(fig_dir / f"04_pair_heatmap_{split_name}.png", dpi=150)
+        plt.close(fig)
 
-    # ─── 4. Negative distance distributions ───────────────────────────────
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    for ax, (dist_key, title) in zip(axes, [
+    dist_keys = [
         ("pos_neg_distance", "Positive ↔ Negative"),
         ("anchor_counterpart_distance", "Anchor ↔ Neg-scene counterpart"),
         ("combined_distance", "Combined score"),
-    ]):
-        train_vals = [t[dist_key] for t in train_triplets]
-        test_vals = [t[dist_key] for t in test_triplets]
-        ax.hist(train_vals, bins=50, alpha=0.6, label="train", color="#4c72b0")
-        ax.hist(test_vals, bins=50, alpha=0.6, label="test", color="#c44e52")
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    for ax, (dist_key, title) in zip(axes, dist_keys):
+        for split_name, triplets in split_triplets.items():
+            vals = [t[dist_key] for t in triplets if t.get(dist_key) is not None]
+            if vals:
+                ax.hist(vals, bins=50, alpha=0.55, label=split_name,
+                        color=_SPLIT_COLORS[split_name])
         ax.set_title(title)
         ax.set_xlabel("Cosine distance")
         ax.set_ylabel("Count")
         ax.legend()
-    fig.suptitle("Negative distance distributions", fontsize=14, y=1.02)
+    fig.suptitle("Negative distance distributions (train / val / golden)", fontsize=13, y=1.02)
     fig.tight_layout()
-    fig.savefig(fig_dir / "04_distance_distributions.png", dpi=150, bbox_inches="tight")
+    fig.savefig(fig_dir / "05_distance_distributions.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # ─── 5. Scene negative-usage balance (train) ──────────────────────────
-    if train_sc:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        
-        # Include scenes that were never used as a negative source (count = 0)
-        # using the train_scenes set passed into the function
-        all_counts = [train_sc.get(scene, 0) for scene in train_scenes]
-        
-        ax.hist(all_counts, bins=40, color="#55a868", edgecolor="white")
-        
-        mean_val = np.mean(all_counts)
-        median_val = np.median(all_counts)
-        max_val = np.max(all_counts)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    for ax, (split_name, ss) in zip(axes, splits):
+        sc = split_sc[split_name]
+        if not ss:
+            continue
+        all_counts = [sc.get(scene, 0) for scene in ss]
+        ax.hist(all_counts, bins=30, color=_SPLIT_COLORS[split_name], edgecolor="white")
+        mean_val = np.mean(all_counts) if all_counts else 0
+        median_val = np.median(all_counts) if all_counts else 0
         zero_scenes = sum(1 for v in all_counts if v == 0)
-        
         ax.axvline(mean_val, color="red", linestyle="--", label=f"Mean: {mean_val:.1f}")
         ax.axvline(median_val, color="blue", linestyle="--", label=f"Median: {median_val:.0f}")
-        
-        # Add an explanatory text box with more context
-        textstr = (f"Total Train Scenes: {len(all_counts)}\n"
-                   f"Never used (0 negatives): {zero_scenes}\n"
-                   f"Most used scene: {max_val} times")
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-        ax.text(0.65, 0.50, textstr, transform=ax.transAxes, fontsize=10,
-                verticalalignment='top', bbox=props)
-
-        ax.set_title("Negative Sampling Balance: Are negatives drawn from diverse scenes?")
-        ax.set_xlabel("Number of negatives pulled from a single scene")
+        textstr = (f"Scenes: {len(ss)}\n"
+                   f"Never used: {zero_scenes}\n"
+                   f"Max used: {max(all_counts) if all_counts else 0}")
+        ax.text(0.62, 0.97, textstr, transform=ax.transAxes, fontsize=9,
+                va="top", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+        ax.set_title(f"{split_name} — negative scene usage")
+        ax.set_xlabel("Negatives drawn from a scene")
         ax.set_ylabel("Number of scenes")
-        ax.legend(loc='upper right')
-        
-        fig.tight_layout()
-        fig.savefig(fig_dir / "05_scene_neg_balance.png", dpi=150)
-        plt.close(fig)
+        ax.legend(fontsize=8)
+    fig.suptitle("Negative sampling balance per split", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(fig_dir / "06_scene_neg_balance.png", dpi=150)
+    plt.close(fig)
 
-    # ─── 6. Source breakdown of triplet roles ─────────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
     for ax, (role, key) in zip(axes, [
         ("Anchor", "anchor_source"),
@@ -649,53 +588,58 @@ def plot_visualizations(
     ]):
         cc = Counter(t[key] for t in train_triplets)
         vals = [cc.get(s, 0) for s in sources]
-        bars = ax.bar(sources, vals, color=["#4c72b0", "#55a868", "#c44e52"])
+        bars = ax.bar(sources, vals, color=[src_color_map[s] for s in sources])
         ax.set_title(f"Train triplets: {role} source")
         ax.set_ylabel("Count")
         for bar, v in zip(bars, vals):
-            ax.text(bar.get_x() + bar.get_width() / 2, v + 10, str(v),
-                    ha="center", va="bottom", fontsize=9)
+            ax.text(bar.get_x() + bar.get_width() / 2, v + max(vals, default=1) * 0.01,
+                    str(v), ha="center", va="bottom", fontsize=9)
+    fig.suptitle("Source breakdown of triplet roles (train split)", fontsize=13)
     fig.tight_layout()
-    fig.savefig(fig_dir / "06_triplet_source_roles.png", dpi=150)
+    fig.savefig(fig_dir / "07_triplet_source_roles.png", dpi=150)
     plt.close(fig)
 
-    # ─── 7. Per-source test ratio (actual vs target) ──────────────────────
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for i, src in enumerate(sources):
-        n_train = sum(1 for s in train_scenes if _scene_source(s) == src)
-        n_test = sum(1 for s in test_scenes if _scene_source(s) == src)
-        total = n_train + n_test
-        ratio = n_test / total if total > 0 else 0
-        ax.bar(i, ratio, color=["#4c72b0", "#55a868", "#c44e52"][i],
-               label=f"{src} ({n_test}/{total})")
-    ax.axhline(0.15, color="black", linestyle="--", label="Target 15%")
-    ax.set_xticks(range(len(sources)))
+    fig, ax = plt.subplots(figsize=(10, 5))
+    x = np.arange(len(sources))
+    width = 0.25
+    for i, (split_name, ss) in enumerate(splits):
+        ratios = []
+        for src in sources:
+            src_total = sum(1 for sc in all_scenes if _scene_source(sc) == src)
+            src_in_split = sum(1 for sc in ss if _scene_source(sc) == src)
+            ratios.append(src_in_split / src_total if src_total > 0 else 0)
+        bars = ax.bar(x + i * width, ratios, width, label=split_name,
+                      color=_SPLIT_COLORS[split_name])
+        for bar, v in zip(bars, ratios):
+            if v > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, v + 0.005,
+                        f"{v:.0%}", ha="center", va="bottom", fontsize=8)
+    ax.axhline(GOLDEN_FRAC, color="#c44e52", linestyle="--", linewidth=1,
+               label=f"Golden target {GOLDEN_FRAC:.0%}")
+    ax.axhline(VAL_FRAC, color="#55a868", linestyle="--", linewidth=1,
+               label=f"Val target {VAL_FRAC:.0%}")
+    ax.set_xticks(x + width)
     ax.set_xticklabels(sources)
-    ax.set_ylabel("Test ratio")
-    ax.set_title("Actual test ratio per source")
-    ax.set_ylim(0, 0.3)
+    ax.set_ylabel("Fraction of source scenes")
+    ax.set_title("Actual split ratio per source vs targets")
+    ax.set_ylim(0, 1.05)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(fig_dir / "07_per_source_test_ratio.png", dpi=150)
+    fig.savefig(fig_dir / "08_per_source_split_ratio.png", dpi=150)
     plt.close(fig)
 
-    print(f"  Figures saved to {fig_dir}")
+    print(f"  Figures saved to {fig_dir}  (8 plots)")
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Main
-# ═════════════════════════════════════════════════════════════════════════════
 
 def process_room(room_name: str, embeddings_path: Path, output_dir: Path):
     t0 = time.time()
 
     if not embeddings_path.exists():
-        print(f"ERROR: embeddings file not found at {embeddings_path}")
+        print(f"ERROR: embeddings not found at {embeddings_path}")
         sys.exit(1)
 
-    # ── 1. Load ──────────────────────────────────────────────────────────────
     print("=" * 60)
-    print("STEP 1 · Loading embeddings")
+    print(f"STEP 1 - Loading embeddings ({room_name})")
     print("=" * 60)
     all_items, scene_to_items, category_to_items = load_embeddings(embeddings_path)
     cats = sorted(category_to_items.keys())
@@ -705,165 +649,152 @@ def process_room(room_name: str, embeddings_path: Path, output_dir: Path):
     for c in cats:
         print(f"    {c}: {len(category_to_items[c])} items")
 
-    # Stats on multi-scene items
-    multi = [it for it in all_items.values() if len(it["scenes"]) > 1]
-    if multi:
-        scene_counts = [len(it["scenes"]) for it in multi]
-        print(f"  Multi-scene items: {len(multi)}"
-              f"  (max {max(scene_counts)} scenes)")
-
-    # ── 2. Split ─────────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("STEP 2 · Train / test split")
+    print("STEP 2 - Golden / Train / Val split")
     print("=" * 60)
-    train_scenes, test_scenes = split_train_test(scene_to_items, TEST_RATIO, RANDOM_SEED)
-    print(f"  Train scenes: {len(train_scenes)}")
-    print(f"  Test  scenes: {len(test_scenes)}")
+    print(f"  Golden fraction: {GOLDEN_FRAC:.0%}  |  Val fraction: {VAL_FRAC:.0%}")
 
-    # Per-source breakdown
-    for src in set(_scene_source(s) for s in train_scenes | test_scenes):
+    golden_scenes, train_scenes, val_scenes = split_golden_train_val(
+        scene_to_items, golden_frac=GOLDEN_FRAC, val_frac=VAL_FRAC, seed=RANDOM_SEED,
+    )
+    print(f"  Train:  {len(train_scenes)} scenes")
+    print(f"  Val:    {len(val_scenes)} scenes")
+    print(f"  Golden: {len(golden_scenes)} scenes")
+
+    all_scenes = train_scenes | val_scenes | golden_scenes
+    for src in sorted(set(_scene_source(s) for s in all_scenes)):
         n_tr = sum(1 for s in train_scenes if _scene_source(s) == src)
-        n_te = sum(1 for s in test_scenes if _scene_source(s) == src)
-        total = n_tr + n_te
-        ratio = n_te / total if total else 0
-        print(f"    {src}: train={n_tr}, test={n_te}, ratio={ratio:.1%}")
+        n_va = sum(1 for s in val_scenes if _scene_source(s) == src)
+        n_go = sum(1 for s in golden_scenes if _scene_source(s) == src)
+        total = n_tr + n_va + n_go
+        print(f"    {src}: train={n_tr} ({n_tr/total:.0%}), "
+              f"val={n_va} ({n_va/total:.0%}), "
+              f"golden={n_go} ({n_go/total:.0%}), total={total}")
 
-    # Pair-eligible = scenes with ≥ 2 distinct categories
-    multi_cat = lambda ss: {
-        s for s in ss
-        if len({it["category"] for it in scene_to_items[s]}) >= 2
-    }
-    train_pair_scenes = multi_cat(train_scenes)
-    test_pair_scenes = multi_cat(test_scenes)
-    print(f"  Train pair-eligible: {len(train_pair_scenes)}")
-    print(f"  Test  pair-eligible: {len(test_pair_scenes)}")
+    def multi_cat(ss):
+        return {s for s in ss if len({it["category"] for it in scene_to_items[s]}) >= 2}
 
-    for label, ss in [("Train", train_scenes), ("Test", test_scenes)]:
-        cc = Counter()
-        for s in ss:
-            for it in scene_to_items[s]:
-                cc[it["category"]] += 1
-        print(f"  {label} items by category: {dict(sorted(cc.items()))}")
+    train_pair = multi_cat(train_scenes)
+    val_pair = multi_cat(val_scenes)
+    golden_pair = multi_cat(golden_scenes)
+    print(f"  Pair-eligible — train: {len(train_pair)}, "
+          f"val: {len(val_pair)}, golden: {len(golden_pair)}")
 
-    # ── 3. Pairs ─────────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("STEP 3 · Generating anchor–positive pairs")
+    print("STEP 3 - Generating anchor-positive pairs")
     print("=" * 60)
-    train_pairs = generate_pairs(scene_to_items, train_pair_scenes)
-    test_pairs = generate_pairs(scene_to_items, test_pair_scenes)
-    print(f"  Train pairs: {len(train_pairs)}")
-    print(f"  Test  pairs: {len(test_pairs)}")
+    print("  [train]")
+    train_pairs = generate_pairs(scene_to_items, train_pair)
+    print(f"    Pairs: {len(train_pairs)}")
 
-    pair_cats = Counter((a["category"], p["category"]) for a, p, _ in train_pairs)
-    print("  Train pair categories:")
-    for (ac, pc), cnt in sorted(pair_cats.items()):
-        print(f"    ({ac}, {pc}): {cnt}")
+    print("  [val]")
+    val_pairs = generate_pairs(scene_to_items, val_pair)
+    print(f"    Pairs: {len(val_pairs)}")
 
-    # ── 4. Negatives (train) ─────────────────────────────────────────────────
+    print("  [golden]")
+    golden_pairs = generate_pairs(scene_to_items, golden_pair)
+    print(f"    Pairs: {len(golden_pairs)}")
+
     print("\n" + "=" * 60)
-    print("STEP 4 · Selecting negatives  [train]")
+    print("STEP 4 - Selecting negatives")
     print("=" * 60)
+
+    print("  [train]")
     train_triplets, train_skip, train_sc = select_negatives(
         train_pairs, scene_to_items, category_to_items, train_scenes,
         NUM_NEGATIVES_PER_PAIR, NEG_PERCENTILE_LOW, NEG_PERCENTILE_HIGH, RANDOM_SEED,
     )
-    print(f"  Triplets: {len(train_triplets)}  |  skipped pairs: {train_skip}")
-    if train_sc:
-        vals = list(train_sc.values())
-        print(
-            f"  Scene neg usage — min: {min(vals)}, max: {max(vals)}, "
-            f"mean: {np.mean(vals):.1f}, median: {np.median(vals):.0f}, "
-            f"std: {np.std(vals):.1f}"
-        )
+    print(f"    Triplets: {len(train_triplets)}  |  skipped: {train_skip}")
 
-    # ── 5. Negatives (test) ──────────────────────────────────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 5 · Selecting negatives  [test]")
-    print("=" * 60)
-    test_triplets, test_skip, test_sc = select_negatives(
-        test_pairs, scene_to_items, category_to_items, test_scenes,
-        NUM_NEGATIVES_PER_PAIR, NEG_PERCENTILE_LOW, NEG_PERCENTILE_HIGH,
-        RANDOM_SEED + 1,
+    print("  [val]")
+    val_triplets, val_skip, val_sc = select_negatives(
+        val_pairs, scene_to_items, category_to_items, val_scenes,
+        NUM_NEGATIVES_PER_PAIR, NEG_PERCENTILE_LOW, NEG_PERCENTILE_HIGH, RANDOM_SEED + 1,
     )
-    print(f"  Triplets: {len(test_triplets)}  |  skipped pairs: {test_skip}")
-    if test_sc:
-        vals = list(test_sc.values())
-        print(
-            f"  Scene neg usage — min: {min(vals)}, max: {max(vals)}, "
-            f"mean: {np.mean(vals):.1f}, median: {np.median(vals):.0f}, "
-            f"std: {np.std(vals):.1f}"
-        )
+    print(f"    Triplets: {len(val_triplets)}  |  skipped: {val_skip}")
 
-    # ── 6. Save ──────────────────────────────────────────────────────────────
+    print("  [golden]")
+    golden_triplets, golden_skip, golden_sc = select_negatives(
+        golden_pairs, scene_to_items, category_to_items, golden_scenes,
+        NUM_NEGATIVES_PER_PAIR, NEG_PERCENTILE_LOW, NEG_PERCENTILE_HIGH, RANDOM_SEED + 2,
+    )
+    print(f"    Triplets: {len(golden_triplets)}  |  skipped: {golden_skip}")
+
     print("\n" + "=" * 60)
-    print("STEP 6 · Saving outputs")
+    print("STEP 5 - Saving outputs")
     print("=" * 60)
+
     metadata = {
-        "distance_metric": "cosine",
+        "split_version": "balanced_golden",
+        "golden_frac": GOLDEN_FRAC,
+        "val_frac": VAL_FRAC,
         "num_negatives_per_pair": NUM_NEGATIVES_PER_PAIR,
         "neg_percentile_range": [NEG_PERCENTILE_LOW, NEG_PERCENTILE_HIGH],
-        "test_ratio": TEST_RATIO,
         "random_seed": RANDOM_SEED,
         "total_items": len(all_items),
         "total_scenes": len(scene_to_items),
         "categories": cats,
+        "num_golden_scenes": len(golden_scenes),
         "num_train_scenes": len(train_scenes),
-        "num_test_scenes": len(test_scenes),
-        "num_train_pair_scenes": len(train_pair_scenes),
-        "num_test_pair_scenes": len(test_pair_scenes),
+        "num_val_scenes": len(val_scenes),
+        "num_golden_pair_scenes": len(golden_pair),
+        "num_train_pair_scenes": len(train_pair),
+        "num_val_pair_scenes": len(val_pair),
         "num_train_pairs": len(train_pairs),
-        "num_test_pairs": len(test_pairs),
+        "num_val_pairs": len(val_pairs),
+        "num_golden_pairs": len(golden_pairs),
         "num_train_triplets": len(train_triplets),
-        "num_test_triplets": len(test_triplets),
+        "num_val_triplets": len(val_triplets),
+        "num_golden_triplets": len(golden_triplets),
         "train_skipped_pairs": train_skip,
-        "test_skipped_pairs": test_skip,
+        "val_skipped_pairs": val_skip,
+        "golden_skipped_pairs": golden_skip,
     }
-    save_outputs(
-        train_triplets, test_triplets,
-        train_scenes, test_scenes,
+
+    _save_triplets(
+        train_triplets, val_triplets, golden_triplets,
+        golden_scenes, train_scenes, val_scenes,
         output_dir, metadata,
     )
-    print(f"  Dir:   {output_dir}")
-    print(f"  Files: triplets.json, train_triplets.csv, test_triplets.csv, scene_split.json")
+    print(f"  Dir: {output_dir}")
+    print(f"  Files: triplets.json, scene_split.json, train/val/golden_triplets.csv")
 
-    # ── 7. Embedding matrix + NPY export ──────────────────────────────────
-    print("\n  Exporting compact embedding matrix …")
+    print("\n  Exporting embedding matrix ...")
     shape = export_embedding_matrix(all_items, output_dir)
     print(f"  embeddings.npz  shape={shape}")
-    print(f"  embedding_index.json")
 
-    print("\n  Exporting triplet index arrays (.npy) …")
-    tr_shape = export_triplet_npy(train_triplets, all_items, output_dir / "train_triplet_indices.npy")
-    te_shape = export_triplet_npy(test_triplets, all_items, output_dir / "test_triplet_indices.npy")
-    print(f"  train_triplet_indices.npy  shape={tr_shape}")
-    print(f"  test_triplet_indices.npy   shape={te_shape}")
+    for name, triplets in [("train", train_triplets), ("val", val_triplets), ("golden", golden_triplets)]:
+        npy_path = output_dir / f"{name}_triplet_indices.npy"
+        s = export_triplet_npy(triplets, all_items, npy_path)
+        print(f"  {npy_path.name}  shape={s}")
 
-    # ── 8. Visualizations ────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("STEP 8 · Generating visualizations")
+    print("STEP 6 - Generating visualizations")
     print("=" * 60)
-    plot_visualizations(
-        train_triplets, test_triplets,
-        train_scenes, test_scenes,
-        scene_to_items, train_sc, test_sc,
+    _plot_triplets(
+        train_triplets, val_triplets, golden_triplets,
+        train_scenes, val_scenes, golden_scenes,
+        scene_to_items, train_sc, val_sc, golden_sc,
         output_dir,
     )
 
     elapsed = time.time() - t0
-    print(f"\nDone  ({elapsed:.1f} s)")
+    print(f"\nDone ({elapsed:.1f}s)")
 
 
 def main():
     for room in ROOMS_TO_PROCESS:
-        print(f"Processing Room: {room}")
-        embeddings_path = BASE_DIR / "data" / "ml_data" / room / "embeddings" / "furniture_embeddings.json"
-        output_dir = BASE_DIR / "data" / "ml_data" / room / "triplets"
-        if not embeddings_path.exists():
-            print(f"Skipping {room}: No embeddings found at {embeddings_path}")
+        emb_path = BASE_DIR / "data" / "ml_data" / room / "embeddings" / "furniture_embeddings.json"
+        if not emb_path.exists():
+            print(f"Skipping {room}: no embeddings at {emb_path}")
             continue
-        process_room(room, embeddings_path, output_dir)
+
+        out_dir = BASE_DIR / "data" / "ml_data" / room / "triplets_v3"
+        print(f"\n{'#' * 60}")
+        print(f"  Processing: {room}")
+        print(f"{'#' * 60}\n")
+        process_room(room, emb_path, out_dir)
+
 
 if __name__ == "__main__":
     main()
-
-

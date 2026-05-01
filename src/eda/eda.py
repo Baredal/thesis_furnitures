@@ -22,8 +22,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# ── Paths ────────────────────────────────────────────────────────────────────
-
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 ROOM_CATEGORIES = {
@@ -38,8 +36,6 @@ ROOM_SOURCES = {
 COLORS = {"deepfurn": "#4c72b0", "sklad_mebliv": "#c44e52"}
 SPLIT_COLORS = {"train": "#4c72b0", "val": "#55a868", "test": "#c44e52"}
 
-
-# ── Room context ─────────────────────────────────────────────────────────────
 
 @dataclass
 class RoomCtx:
@@ -78,8 +74,6 @@ def make_ctx(room: str) -> RoomCtx:
     )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def scene_source(name: str) -> str:
     for prefix in ("deepfurn", "sklad_mebliv", "wayfair"):
         if name.startswith(prefix):
@@ -102,16 +96,11 @@ def print_table(title: str, headers: list[str], rows: list[list], file=None):
         file.write(text + "\n\n")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# 1. TABLES
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def build_tables(ctx: RoomCtx):
     report = open(ctx.output_dir / "tables.txt", "w", encoding="utf-8")
     items = ctx.manifest()
     split = ctx.scene_split()
 
-    # ── Table 1: Items by category × source ─────────────────────────────────
     counts = Counter((it["source"], it["category"]) for it in items)
     headers = ["Category"] + ctx.sources + ["Total"]
     rows = []
@@ -130,7 +119,6 @@ def build_tables(ctx: RoomCtx):
                 [str(sum(col_totals.values()))])
     print_table(f"Table 1 — Furniture items by category and source ({ctx.room})", headers, rows, report)
 
-    # ── Table 2: Scene split overview ────────────────────────────────────────
     headers = ["Split", "Scenes"] + ctx.sources
     rows = []
     for split_name in ["train_scenes", "val_scenes", "golden_scenes"]:
@@ -140,9 +128,8 @@ def build_tables(ctx: RoomCtx):
         rows.append([label, str(len(scenes))] + [str(src_c.get(s, 0)) for s in ctx.sources])
     total_scenes = sum(len(split[k]) for k in split)
     rows.append(["Total", str(total_scenes)] + [""] * len(ctx.sources))
-    print_table(f"Table 2 — Three-way scene split ({ctx.room}, triplets_v3)", headers, rows, report)
+    print_table(f"Table 2 — Three-way scene split ({ctx.room})", headers, rows, report)
 
-    # ── Table 3: Triplet counts and unique items per split ───────────────────
     headers = ["Split", "Triplets", "Unique items", "Unique pairs"]
     rows = []
     for split_name in ["train", "val", "golden"]:
@@ -156,9 +143,6 @@ def build_tables(ctx: RoomCtx):
         rows.append([label, str(len(triplets)), str(len(item_ids)), str(len(pairs))])
     print_table(f"Table 3 — Triplet dataset statistics ({ctx.room})", headers, rows, report)
 
-    # ── Table 4: Scenes and items per source ─────────────────────────────────
-    # Scene counts from scene_split.json (authoritative for training).
-    # Item counts from manifest (data/total/).
     all_training_scenes = split["train_scenes"] + split["val_scenes"] + split["golden_scenes"]
     split_scene_sets = defaultdict(set)
     for s in all_training_scenes:
@@ -176,10 +160,6 @@ def build_tables(ctx: RoomCtx):
     report.close()
     print(f"  Tables saved → {ctx.output_dir / 'tables.txt'}")
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 2. FIGURES
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def fig1_category_by_source(ctx: RoomCtx):
     items = ctx.manifest()
@@ -343,11 +323,9 @@ def fig6_sample_scenes(ctx: RoomCtx, n_samples=3, seed=42):
         plt.close(fig)
 
 
-# ── Per-room runner ───────────────────────────────────────────────────────────
-
 def run_room(room: str):
     print(f"\n{'=' * 60}")
-    print(f"  EDA — {room} / triplets_v3")
+    print(f"  EDA — {room}")
     print(f"{'=' * 60}")
     ctx = make_ctx(room)
     build_tables(ctx)
@@ -359,10 +337,6 @@ def run_room(room: str):
     fig6_sample_scenes(ctx)
     print(f"  All outputs saved → {ctx.output_dir}")
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Main
-# ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")

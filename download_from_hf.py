@@ -6,7 +6,7 @@ Downloads from two repos:
   - Model repo    → model checkpoints + retrieval artefacts
   - Dataset repo  → furniture catalog images + manifests
                     + triplet CSVs (for retraining)
-                    + CLIP embeddings (for re-running build_triplets_v2.py)
+                    + CLIP embeddings (for re-running build_triplets.py)
                     + scene images (for "Original scene" expander in the app)
 
 After this script completes, run:

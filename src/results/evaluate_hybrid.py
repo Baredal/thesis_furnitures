@@ -1,19 +1,7 @@
-"""
-evaluate_hybrid.py — Hybrid (embedding + RGB histogram) evaluation on the
-golden (test) split for BOTH rooms.
+"""Hybrid (embedding + RGB histogram) evaluation on the golden split for both rooms.
 
 Score: EMBED_W * cosine(embedding) + HIST_W * Bhattacharyya(histogram)
-Mirrors FurnitureRetriever in src/retrieval/retrieval_logic.py (default 50/50).
-
-Models evaluated per room:
-  - ResNet18 backbone-only (ImageNet features, no task-specific head)
-  - EfficientNet-B3 backbone-only (ImageNet features, no task-specific head)
-  - ResNet18 fine-tuned (v3 checkpoint)
-
-Outputs (for each room, prefixed with '{room}_'):
-  - {room}_results_hybrid.json
-  - {room}_hybrid_scene_recall.png
-  - {room}_hybrid_openset_pr.png
+Mirrors FurnitureRetriever default weighting (50/50).
 
 Usage:
     python src/results/evaluate_hybrid.py
@@ -84,10 +72,6 @@ def _pretty_cat(cat: str) -> str:
         return "storage"
     return cat
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Data
-# ═══════════════════════════════════════════════════════════════════════════════
 
 val_tf = transforms.Compose([
     transforms.ToTensor(),
@@ -192,10 +176,6 @@ def hybrid_score(
     return EMBED_W * cos + HIST_W * bc
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Models
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class BackboneOnlyWrapper(nn.Module):
     """L2-normalised backbone features, bypassing the randomly-init embedding head."""
     def __init__(self, siamese_model: nn.Module):
@@ -252,10 +232,6 @@ def load_model(cfg: dict) -> nn.Module:
               f"val_loss={ckpt.get('val_loss','?'):.4f}, emb_dim={c['embedding_dim']}")
     return model.to(DEVICE).eval()
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Metrics
-# ═══════════════════════════════════════════════════════════════════════════════
 
 criterion = nn.TripletMarginLoss(margin=MARGIN, p=2)
 
@@ -439,10 +415,6 @@ def hybrid_precision_recall(item_to_emb, item_to_scene, scene_to_items,
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Plots
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def plot_hybrid_scene_recall(all_results, model_names, out_path: Path):
     fig, ax = plt.subplots(figsize=(8, 5))
     for name in model_names:
@@ -477,10 +449,6 @@ def plot_hybrid_openset_pr(all_results, model_names, out_path: Path):
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Run for one room
-# ═══════════════════════════════════════════════════════════════════════════════
 
 def run_for_room(room: str):
     print("\n" + "=" * 70)

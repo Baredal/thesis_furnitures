@@ -9,6 +9,8 @@ data/total/
 data/retrieval_data/
 data/tmp/
 data/w_b_data/
+data/unprocessed_data/
+data/thesis_figures/comparison/
 
 # Upload scripts contain hardcoded token — not for public repo
 upload_to_hf.py

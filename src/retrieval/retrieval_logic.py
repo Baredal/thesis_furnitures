@@ -29,11 +29,11 @@ class FurnitureRetriever:
         self.room = room
         self.retrieval_dir = BASE_DIR / "data" / "retrieval_data" / room
         self.image_root = BASE_DIR / "data" / "total" / room
-        
+
         npz_path   = self.retrieval_dir / "retrieval_embeddings.npz"
         index_path = self.retrieval_dir / "retrieval_index.json"
         hists_path = self.retrieval_dir / "retrieval_histograms_bc.npz"
-        
+
         data = np.load(npz_path, allow_pickle=False)
         self._embeddings: np.ndarray = data["embeddings"]
         with open(index_path, "r", encoding="utf-8") as f:
@@ -49,7 +49,6 @@ class FurnitureRetriever:
             self._category_rows[meta["category"]].append(row)
             self._id_to_row[meta["furniture_id"]] = row
 
-        # External (uploaded) embeddings keyed by furniture_id
         self._external: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         self._model = None
         self._transform = None
@@ -59,8 +58,6 @@ class FurnitureRetriever:
         print(f"FurnitureRetriever ready — {N} items, {len(self._category_rows)} categories")
         for cat in sorted(self._category_rows):
             print(f"  {cat:15s}: {len(self._category_rows[cat])} items")
-
-    # ── External (uploaded) image support ────────────────────────────────────
 
     _CKPT_NAMES = {
         "bedrooms":     "v3/best_model_v3_resnet18_new_data.pt",
@@ -103,8 +100,6 @@ class FurnitureRetriever:
 
     def clear_external(self, fid: str):
         self._external.pop(fid, None)
-
-    # ── Retrieval ─────────────────────────────────────────────────────────────
 
     def categories(self) -> list[str]:
         return list(self._category_rows.keys())
@@ -193,5 +188,3 @@ class FurnitureRetriever:
             "embed_score":  round(embed_score, 4),
             "hist_score":   round(hist_score, 4),
         }
-
-
