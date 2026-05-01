@@ -12,6 +12,27 @@ This repository is the full code base accompanying the bachelor's thesis of the 
 
 The project addresses visual furniture compatibility: given a selected furniture item, retrieve other items that are stylistically compatible with it. A Siamese ResNet18 is trained with triplet margin loss on a multi-source dataset covering two room types (bedrooms, living rooms). A Streamlit app lets a user build a room step-by-step, retrieving compatible candidates at each stage via a hybrid embedding + colour-histogram scorer.
 
+### Problem and approach
+
+Selecting furniture that looks good together is difficult without visual intuition or professional help. The goal of this project is to make that easier with a retrieval system that surfaces stylistically compatible items automatically.
+
+The core idea is metric learning: a Siamese network is trained so that embeddings of compatible furniture items (items that appear together in the same real-world scene) are pulled closer together in embedding space, while incompatible items (same category but different scene) are pushed apart. At retrieval time, a query embedding is compared against all candidates in the catalog; the top results are items the model has learned to associate with that style.
+
+A pure embedding similarity can favour items that look identical in colour rather than style. To counteract this, the final retrieval score blends the learned embedding similarity with a Bhattacharyya colour-histogram coefficient, with a user-adjustable weight. This lets the user bias results toward colour-matched items or toward style-matched items independently.
+
+---
+
+## App walkthrough
+
+The Streamlit app guides a user through assembling a room step by step.
+
+1. **Choose room type** — bedrooms or living rooms.
+2. **Optional anchor photo** — upload your own furniture photo at step 0. The model embeds it on the fly and uses it as the starting point for all subsequent recommendations.
+3. **Step through the chain** — for bedrooms the order is bed → small storage → large storage → table → chair/stool → curtain; for living rooms it is sofa → table → small storage → large storage → chair/stool → curtain.
+4. **Pick or skip** — at each step five compatible candidates are shown, scored by the hybrid retriever. You can select one, skip the category, or shuffle for five more options.
+5. **Adjust the scoring weight** — a sidebar slider lets you move between "style" (embedding-dominated) and "colour" (histogram-dominated) scoring in real time.
+6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available) and can be reverse-searched via Google Lens. A collage of all selected items can be downloaded as a single JPEG.
+
 ---
 
 ## What runs and what is for reference
@@ -57,13 +78,49 @@ requirements.txt
 
 ---
 
+## Pipeline
+
+The full pipeline from raw data to the running app has seven stages:
+
+1. **Per-source preprocessing** (`src/data_processing/`) — raw data from each source is downloaded, cleaned, and normalised into a unified scene format: each scene folder contains `annotation.json`, `scene_image.jpg`, and a `furnitures/` subfolder with one cropped image per item.
+2. **Catalog aggregation** (`src/data_processing/total/`) — all sources are merged into `data/total/{room}/` with a single `general_manifest.json` listing every item with its category, source, scene, and image path.
+3. **Embedding extraction for triplet mining** (`src/ml/embeddings_for_training.ipynb`) — a frozen ResNet50 (ImageNet V2) produces a 2048-dim feature vector for every furniture image. These are stored in `furniture_embeddings.json` and used only for negative selection during triplet construction.
+4. **Triplet construction** (`src/ml/build_triplets.py`) — anchor/positive/negative triplets are mined scene-by-scene. Negatives are drawn from the [50th, 95th] cosine-distance percentile to ensure moderate difficulty. Scenes are split three ways: golden (18 %, held out for final evaluation), train (≈70 %), val (12 %, used for model selection).
+5. **Siamese network training** (`src/ml/train.ipynb`) — a ResNet18 backbone with a two-layer embedding head is fine-tuned with triplet margin loss. Best checkpoint saved by val loss.
+6. **Retrieval index generation** (`src/retrieval/make_embeddings.py`) — the trained model encodes every catalog item into a 128-dim embedding. Embeddings, item metadata, and colour histograms are saved to `data/retrieval_data/{room}/`.
+7. **Streamlit app** (`src/app/streamlit_app.py`) — loads the retrieval index at startup and serves step-by-step room-building recommendations.
+
+---
+
 ## Data
 
-Two room types are covered.
+Two room types are covered: **bedrooms** and **living rooms**.
 
-Scenes are split into three non-overlapping scene-level sets: **golden** (18 %) reserved for final evaluation only, **train** (70 %), and **val** (12 %) for model selection.
+### Sources
 
-Triplet construction: anchor = item from a scene → positive = different-category item from the **same** scene → negative = same category as positive from a **different** scene, selected from the [50th, 95th] cosine-distance percentile using ResNet50/ImageNet embeddings. Five negatives per anchor–positive pair.
+| Source | Rooms | Scenes |
+|---|---|---|
+| [DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture) | bedrooms + living rooms | 801 per room type |
+| Sklad Mebliv (Ukrainian online retailer) | bedrooms only | 73 |
+
+DeepFurniture provides real interior photographs with bounding-box annotations for individual furniture items. Sklad Mebliv scenes were scraped from product pages; each page groups several items from the same collection, which serves as a proxy for compatibility.
+
+### Categories
+
+| Room | Categories |
+|---|---|
+| Bedrooms | bed, small\_storage, large\_storage, table, chair\_stool, curtain |
+| Living rooms | sofa, small\_storage, large\_storage, table, chair\_stool, curtain |
+
+### Scene split
+
+Scenes are split at the scene level (no furniture item appears in more than one split) into three non-overlapping sets: **golden** (18 %) reserved for final evaluation only, **train** (≈70 %), and **val** (12 %) for model selection. The split is stratified per source so each source contributes the same proportions across all three sets.
+
+### Triplet construction
+
+Anchor = item from a scene → positive = different-category item from the **same** scene → negative = same category as positive from a **different** scene.
+
+Negative difficulty is controlled by cosine distance between the positive and negative embeddings (computed with a frozen ResNet50). Only negatives in the [50th, 95th] distance percentile are eligible — easy negatives (clearly dissimilar) and extreme outliers are excluded. Five negatives are sampled per anchor–positive pair with a per-scene quota to prevent any single scene from dominating.
 
 **HuggingFace dataset:** [Darebal/furniture-catalog](https://huggingface.co/datasets/Darebal/furniture-catalog)  
 Contains catalog images, triplet CSVs (train / val / golden), scene images, and CLIP embeddings.
@@ -72,11 +129,25 @@ Contains catalog images, triplet CSVs (train / val / golden), scene images, and 
 
 ## Model
 
-**Architecture:** Siamese ResNet18 · embedding head: `Linear(512→256) → BN → ReLU → Linear(256→128)` · L2-normalised output · triplet margin loss (margin = 1.0) · AdamW + linear warmup + ReduceLROnPlateau.
+**Architecture:** Siamese ResNet18 · embedding head: `Linear(512→256) → BN → ReLU → Linear(256→128)` · L2-normalised 128-dim output · triplet margin loss (margin = 1.0).
 
-Two separate models are trained — one per room type.
+Both the backbone and the embedding head are trained end-to-end. All weights are shared between the two branches of the Siamese network (the standard weight-sharing setup).
+
+Two separate models are trained — one per room type — because the category sets differ and the visual style distributions are distinct.
 
 **HuggingFace model repo:** [Darebal/furniture-compatibility-siamese](https://huggingface.co/Darebal/furniture-compatibility-siamese)
+
+### Training configuration
+
+| Setting | Value |
+|---|---|
+| Optimizer | AdamW |
+| Backbone LR | head LR × 0.1 (differential LR) |
+| LR schedule | Linear warmup → ReduceLROnPlateau |
+| Gradient clipping | max\_norm = 5.0 |
+| Mixed precision | GradScaler (FP16) |
+| Early stopping | patience on val loss |
+| Experiment tracking | Weights & Biases (`furnishings_compatibility`) |
 
 ### Results on the golden set
 
@@ -99,6 +170,28 @@ Two separate models are trained — one per room type.
 The hybrid retriever (embedding + Bhattacharyya colour histogram, equal weighting) further improves scene recall: bedrooms reach **Scene R@10 = 40.0 %**, living rooms **Scene R@30 = 48.9 %**.
 
 Training curves and distance-distribution plots are committed under `src/results/` and `data/w_b_runs/`.
+
+### Metric definitions
+
+- **Triplet accuracy** — fraction of golden-set triplets where `dist(anchor, positive) < dist(anchor, negative)`. Measures whether the model correctly ranks the compatible item above the incompatible one.
+- **MRR** (Mean Reciprocal Rank) — for each anchor, all items of the positive's category are ranked by embedding similarity; MRR is the mean of 1/rank for the true positive. Measures how highly the model ranks the correct compatible item in a full gallery retrieval.
+- **Scene R@K** (Scene Recall at K) — for each anchor, a gallery of all catalog items (not just the triplet negative) is ranked; the query is considered a hit if any item from the same scene as the positive appears in the top K. Measures real-world retrieval quality at different cut-off depths.
+
+---
+
+## Retrieval system
+
+At runtime, `FurnitureRetriever` scores every candidate in the target category against the items already selected by the user:
+
+```
+score = embed_weight × cosine_sim(embedding_query, embedding_candidate)
+      + hist_weight  × bhattacharyya(histogram_query, histogram_candidate)
+```
+
+- **Embedding similarity** uses the fine-tuned ResNet18 output (128-dim, L2-normalised). High similarity means the model learned that these item styles co-occur in real rooms.
+- **Bhattacharyya coefficient** is computed over RGB histograms (32 bins per channel, sqrt-normalised so the coefficient equals the dot product). High coefficient means similar dominant colours.
+- When multiple items have already been selected, their scores are aggregated with a **recency bias**: the most recently chosen item is weighted 1.0, older items linearly down to 0.3. This lets the chain build coherently around the latest selection.
+- The user controls `embed_weight` / `hist_weight` (sum = 1.0) via a sidebar slider. Default is 0.8 / 0.2 — style-dominant with a small colour correction.
 
 ---
 
@@ -154,7 +247,7 @@ To reproduce from raw data (requires original source access), additionally run:
 python src/eda/eda.py
 ```
 
-Pre-generated figures and tables are already committed in `data/eda_output/`.
+Generates four figures and four summary tables per room type: item counts by category and source, scene-size distribution, three-way split breakdown, category-pair heatmap in train triplets, and negative-distance distributions. Pre-generated outputs are already committed in `data/eda_output/`.
 
 ---
 

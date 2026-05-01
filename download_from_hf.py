@@ -3,7 +3,7 @@ Download all artefacts needed to run the Streamlit app (and optionally retrain)
 from HuggingFace.
 
 Downloads from two repos:
-  - Model repo    → model checkpoints + retrieval artefacts
+  - Model repo    → retrieval artefacts (histograms, embeddings, index, model weights)
   - Dataset repo  → furniture catalog images + manifests
                     + triplet CSVs (for retraining)
                     + CLIP embeddings (for re-running build_triplets.py)
@@ -22,6 +22,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 HF_USERNAME  = "Darebal"
 MODEL_REPO   = f"{HF_USERNAME}/furniture-compatibility-siamese"
@@ -77,16 +78,26 @@ TRAINING_FILES = {
 
 def download_models():
     print(f"Downloading model artefacts from {MODEL_REPO}...")
+    missing = []
     for repo_path, local_path in MODEL_FILES.items():
         local_path.parent.mkdir(parents=True, exist_ok=True)
         if local_path.exists():
             print(f"  already exists — skipping: {local_path.name}")
             continue
         print(f"  {repo_path}...")
-        tmp = hf_hub_download(repo_id=MODEL_REPO, filename=repo_path,
-                              repo_type="model", token=TOKEN)
-        shutil.copy(tmp, local_path)
-        print(f"    → {local_path}")
+        try:
+            tmp = hf_hub_download(repo_id=MODEL_REPO, filename=repo_path,
+                                  repo_type="model", token=TOKEN)
+            shutil.copy(tmp, local_path)
+            print(f"    → {local_path}")
+        except EntryNotFoundError:
+            print(f"  WARNING: not found in repo — {repo_path}")
+            missing.append(repo_path)
+    if missing:
+        print("\n  The following files are not yet uploaded to the model repo:")
+        for p in missing:
+            print(f"    {MODEL_REPO}/{p}")
+        print("  Upload them with: huggingface-cli upload or the HuggingFace web UI.")
 
 
 def download_catalog():
