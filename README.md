@@ -260,11 +260,11 @@ python src/results/evaluate.py
 python src/results/evaluate_hybrid.py
 ```
 
-To reproduce from proccessed data creaation triplets (requires processed data), additionally run:
+To reproduce from proccessed data creation triplets (requires processed data), additionally run:
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction for negative mining
 - Per-source notebooks in `src/data_processing/`
 
-Processed is standardised into a unified directory structure, regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
+Processed is standardised into a unified directory structure regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
 
 ```text
 processed_data/
