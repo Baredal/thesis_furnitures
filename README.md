@@ -48,13 +48,15 @@ After running `download_from_hf.py` the following work fully:
 The following are included for **methodology documentation**, but require access to the original raw data sources and will not run out of the box:
 
 - `src/data_processing/sklad_mebliv/` — scraping and preprocessing for the Sklad Mebliv Ukrainian retailer: downloading product pages, parsing annotations, and normalising into the unified scene format
-- `src/data_processing/deepfurn/process_annotations.ipynb` — annotation processing for DeepFurniture; note that the initial scene extraction and image-level preprocessing scripts are **not included** to avoid confusion with the full DeepFurniture pipeline, which operates on the original dataset from [byliu/DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture)
+- `src/data_processing/deepfurn/process_annotations.ipynb` — annotation processing for DeepFurniture; the furniture bounding-box cropping and image collection scripts are **not included** — they operate on the raw DeepFurniture source files and would not be meaningful without the full original dataset from [byliu/DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture)
 - `src/data_processing/total/` — merging all sources into the unified catalog with `general_manifest.json`
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction over raw furniture images (prerequisite for triplet mining from scratch)
 - `src/ml/build_triplets.py` — triplet construction from scratch (ready CSVs are downloadable from HuggingFace)
 - `src/visualization/` — notebooks used to generate thesis figures
 
-**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently and was bad itself. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
+**Note on data processing completeness:** For both DeepFurniture and Wayfair, the furniture extraction and image collection scripts are intentionally not included. Those steps depend on the original source files and reproducing them requires access to the raw datasets; including partial scripts would be more confusing than helpful. What is published covers annotation parsing and the normalisation logic only.
+
+**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
 
 ---
 
@@ -153,29 +155,42 @@ Two separate models are trained — one per room type — because the category s
 
 #### Bedrooms
 
-| Model | Triplet acc. | MRR | Scene R@5 | Scene R@30 |
-|---|---|---|---|---|
-| ResNet18 (ImageNet, no fine-tuning) | 56.9 % | 0.479 | 5.0 % | 17.5 % |
-| EfficientNet-B3 (ImageNet, no fine-tuning) | 54.0 % | 0.452 | 2.9 % | 10.8 % |
-| **ResNet18 fine-tuned** | **81.4 %** | **0.754** | **36.9 %** | **63.1 %** |
+| Model | Triplet acc. | Margin sat. | Dist. gap | MRR | Scene R@5 | Scene R@10 | Scene R@30 | Compat R@10 |
+|---|---|---|---|---|---|---|---|---|
+| ResNet18 (ImageNet) | 56.9 % | 0.0 % | 0.021 | 0.479 | 5.0 % | 8.8 % | 17.5 % | 5.5 % |
+| EfficientNet-B3 (ImageNet) | 54.0 % | 0.0 % | 0.012 | 0.452 | 2.9 % | 3.8 % | 10.8 % | 3.7 % |
+| **ResNet18 fine-tuned** | **81.4 %** | **36.4 %** | **0.641** | **0.754** | **36.9 %** | **45.6 %** | **63.1 %** | **22.5 %** |
 
 #### Living rooms
 
-| Model | Triplet acc. | MRR | Scene R@5 | Scene R@30 |
-|---|---|---|---|---|
-| ResNet18 (ImageNet, no fine-tuning) | 55.2 % | 0.474 | 15.4 % | 29.4 % |
-| EfficientNet-B3 (ImageNet, no fine-tuning) | 53.7 % | 0.447 | 9.0 % | 22.1 % |
-| **ResNet18 fine-tuned** | **73.0 %** | **0.635** | **14.5 %** | **50.0 %** |
+| Model | Triplet acc. | Margin sat. | Dist. gap | MRR | Scene R@5 | Scene R@10 | Scene R@30 | Compat R@10 |
+|---|---|---|---|---|---|---|---|---|
+| ResNet18 (ImageNet) | 55.2 % | 0.0 % | 0.017 | 0.474 | 15.4 % | 19.1 % | 29.4 % | 7.3 % |
+| EfficientNet-B3 (ImageNet) | 53.7 % | 0.0 % | 0.010 | 0.447 | 9.0 % | 13.4 % | 22.1 % | 5.5 % |
+| **ResNet18 fine-tuned** | **73.0 %** | **27.4 %** | **0.458** | **0.635** | **14.5 %** | **25.0 %** | **50.0 %** | **9.7 %** |
 
-The hybrid retriever (embedding + Bhattacharyya colour histogram, equal weighting) further improves scene recall: bedrooms reach **Scene R@10 = 40.0 %**, living rooms **Scene R@30 = 48.9 %**.
+*Margin sat. = fraction of triplets where the embedding gap exceeds the margin (1.0). Dist. gap = mean(neg dist) − mean(pos dist). Compat R@10 = fraction of all compatible catalog items recovered in the top 10.*
+
+#### Hybrid retriever (embedding + colour histogram, 50 / 50 weight)
+
+| Room | Scene R@5 | Scene R@10 | Scene R@30 | Compat P@5 | Compat R@10 |
+|---|---|---|---|---|---|
+| Bedrooms (fine-tuned) | 26.9 % | 40.0 % | 62.1 % | 7.6 % | 19.3 % |
+| Living rooms (fine-tuned) | 16.0 % | 25.7 % | 48.9 % | 4.6 % | 10.0 % |
+
+The colour component biases results toward colour-coherent candidates; the scene-recall trade-off is adjustable via the sidebar slider in the app (default: 0.8 embedding / 0.2 colour).
 
 Training curves and distance-distribution plots are committed under `src/results/` and `data/w_b_runs/`.
 
 ### Metric definitions
 
 - **Triplet accuracy** — fraction of golden-set triplets where `dist(anchor, positive) < dist(anchor, negative)`. Measures whether the model correctly ranks the compatible item above the incompatible one.
+- **Margin satisfied** — fraction of triplets where `dist(anchor, negative) − dist(anchor, positive) > margin (1.0)`. Stricter than triplet accuracy: checks that compatible and incompatible items are separated by at least the full margin, not just ordered correctly.
+- **Distance gap** — `mean(dist(anchor, negative)) − mean(dist(anchor, positive))` over the golden set. Larger gap means embeddings of compatible items are pulled substantially closer than incompatible ones.
+- **Triplet R@K** — per-anchor, K negatives are available (one per triplet); the query is a hit if the positive ranks in the top K among those negatives. Measures rank quality within the hard-negative context of the triplet set.
 - **MRR** (Mean Reciprocal Rank) — for each anchor, all items of the positive's category are ranked by embedding similarity; MRR is the mean of 1/rank for the true positive. Measures how highly the model ranks the correct compatible item in a full gallery retrieval.
-- **Scene R@K** (Scene Recall at K) — for each anchor, a gallery of all catalog items (not just the triplet negative) is ranked; the query is considered a hit if any item from the same scene as the positive appears in the top K. Measures real-world retrieval quality at different cut-off depths.
+- **Scene R@K** (Scene Recall at K) — for each anchor, a gallery of all catalog items (not just the triplet negative) is ranked; the query is a hit if any item from the same scene as the positive appears in the top K. Measures real-world retrieval quality at different cut-off depths.
+- **Compat Precision@K / Compat Recall@K** — ground truth is expanded beyond the single triplet positive to all catalog items co-occurring in the anchor's scene. Precision@K = fraction of top-K retrievals that are scene-compatible; Recall@K = fraction of all compatible items recovered in the top K. These measure retrieval quality against the full scene-level compatibility signal rather than just the triplet pair.
 
 ---
 
