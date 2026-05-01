@@ -12,14 +12,6 @@ This repository is the full code base accompanying the bachelor's thesis of the 
 
 The project addresses visual furniture compatibility: given a selected furniture item, retrieve other items that are stylistically compatible with it. A Siamese ResNet18 is trained with triplet margin loss on a multi-source dataset covering two room types (bedrooms, living rooms). A Streamlit app lets a user build a room step-by-step, retrieving compatible candidates at each stage via a hybrid embedding + colour-histogram scorer.
 
-### Problem and approach
-
-Selecting furniture that looks good together is difficult without visual intuition or professional help. The goal of this project is to make that easier with a retrieval system that surfaces stylistically compatible items automatically.
-
-The core idea is metric learning: a Siamese network is trained so that embeddings of compatible furniture items (items that appear together in the same real-world scene) are pulled closer together in embedding space, while incompatible items (same category but different scene) are pushed apart. At retrieval time, a query embedding is compared against all candidates in the catalog; the top results are items the model has learned to associate with that style.
-
-A pure embedding similarity can favour items that look identical in colour rather than style. To counteract this, the final retrieval score blends the learned embedding similarity with a Bhattacharyya colour-histogram coefficient, with a user-adjustable weight. This lets the user bias results toward colour-matched items or toward style-matched items independently.
-
 ---
 
 ## App walkthrough
@@ -54,7 +46,7 @@ The following are included for **methodology documentation**, but require access
 - `src/ml/build_triplets.py` — triplet construction from scratch (ready CSVs are downloadable from HuggingFace)
 - `src/visualization/` — notebooks used to generate thesis figures
 
-**Note on data processing completeness:** For both DeepFurniture and Wayfair, the furniture extraction and image collection scripts are intentionally not included. Those steps depend on the original source files and reproducing them requires access to the raw datasets; including partial scripts would be more confusing than helpful. What is published covers annotation parsing and the normalisation logic only.
+**Note on data processing completeness:** In the case of DeepFurniture, not all scripts for extracting furniture and collecting images are included, and not all of them correspond 100% to the final dataset. This stage depends on the source files, and recreating them requires access to the raw datasets, which are very large. Additionally, the final dataset was compiled over many attempts, relabeled, and tested, which took a significant amount of time. Overall, the process involved searching the code for scenes with the appropriate number of furniture items (excluding trash), extracting scenes, relabeling, and unifying them for the training dataset.
 
 **Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
 
@@ -198,36 +190,6 @@ Two separate models are trained — one per room type — because the category s
 | Early stopping | patience on val loss |
 | Experiment tracking | Weights & Biases (`furnishings_compatibility`) |
 
-### Results on the golden set
-
-#### Bedrooms
-
-| Model | Triplet acc. | Margin sat. | Dist. gap | MRR | Scene R@5 | Scene R@10 | Scene R@30 | Compat R@10 |
-|---|---|---|---|---|---|---|---|---|
-| ResNet18 (ImageNet) | 56.9 % | 0.0 % | 0.021 | 0.479 | 5.0 % | 8.8 % | 17.5 % | 5.5 % |
-| EfficientNet-B3 (ImageNet) | 54.0 % | 0.0 % | 0.012 | 0.452 | 2.9 % | 3.8 % | 10.8 % | 3.7 % |
-| **ResNet18 fine-tuned** | **81.4 %** | **36.4 %** | **0.641** | **0.754** | **36.9 %** | **45.6 %** | **63.1 %** | **22.5 %** |
-
-#### Living rooms
-
-| Model | Triplet acc. | Margin sat. | Dist. gap | MRR | Scene R@5 | Scene R@10 | Scene R@30 | Compat R@10 |
-|---|---|---|---|---|---|---|---|---|
-| ResNet18 (ImageNet) | 55.2 % | 0.0 % | 0.017 | 0.474 | 15.4 % | 19.1 % | 29.4 % | 7.3 % |
-| EfficientNet-B3 (ImageNet) | 53.7 % | 0.0 % | 0.010 | 0.447 | 9.0 % | 13.4 % | 22.1 % | 5.5 % |
-| **ResNet18 fine-tuned** | **73.0 %** | **27.4 %** | **0.458** | **0.635** | **14.5 %** | **25.0 %** | **50.0 %** | **9.7 %** |
-
-*Margin sat. = fraction of triplets where the embedding gap exceeds the margin (1.0). Dist. gap = mean(neg dist) − mean(pos dist). Compat R@10 = fraction of all compatible catalog items recovered in the top 10.*
-
-#### Hybrid retriever (embedding + colour histogram, 50 / 50 weight)
-
-| Room | Scene R@5 | Scene R@10 | Scene R@30 | Compat P@5 | Compat R@10 |
-|---|---|---|---|---|---|
-| Bedrooms (fine-tuned) | 26.9 % | 40.0 % | 62.1 % | 7.6 % | 19.3 % |
-| Living rooms (fine-tuned) | 16.0 % | 25.7 % | 48.9 % | 4.6 % | 10.0 % |
-
-The colour component biases results toward colour-coherent candidates; the scene-recall trade-off is adjustable via the sidebar slider in the app (default: 0.8 embedding / 0.2 colour).
-
-Training curves and distance-distribution plots are committed under `src/results/` and `data/w_b_runs/`.
 
 ### Metric definitions
 
@@ -265,6 +227,7 @@ cd thesis_furnitures
 pip install -r requirements.txt
 
 # Download model weights + retrieval artifacts + dataset from HuggingFace
+git lfs install
 python download_from_hf.py
 
 # Run the Streamlit app
@@ -297,10 +260,54 @@ python src/results/evaluate.py
 python src/results/evaluate_hybrid.py
 ```
 
-To reproduce from raw data (requires original source access), additionally run:
+To reproduce from proccessed data creaation triplets (requires processed data), additionally run:
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction for negative mining
 - Per-source notebooks in `src/data_processing/`
 
+Processed is standardised into a unified directory structure, regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
+
+```text
+processed_data/
+  {room_type}/             # e.g., bedrooms
+    {source}/              # e.g., deepfurn
+      {scene_id}/          # e.g., deepfurn_0000
+        annotations.json   # Scene metadata and labels
+        scene_image.jpg    # The full, uncropped original image
+        furnitures/        # Directory containing individually cropped items
+          {furniture_id}.jpg 
+          ...
+
+```
+The annotations.json file within every scene directory follows a strict schema that links each cropped image inside the furnitures/ folder to its corresponding category:
+
+```
+{
+  "scene_name": "deepfurn_0000",
+  "furnitures": [
+    {
+      "furniture_id": "2839115",
+      "category": "chair_stool"
+    },
+    {
+      "furniture_id": "6801",
+      "category": "table"
+    },
+    {
+      "furniture_id": "2830190",
+      "category": "curtain"
+    },
+    {
+      "furniture_id": "2875981",
+      "category": "bed"
+    },
+    {
+      "furniture_id": "3516687",
+      "category": "small_storage"
+    }
+  ]
+}
+
+```
 ---
 
 ## EDA

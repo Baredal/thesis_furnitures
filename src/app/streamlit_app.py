@@ -117,7 +117,7 @@ def show_item_meta(item: dict, room: str = DEFAULT_ROOM):
     scene_path = scene_image_path(item, room)
     if scene_path.exists():
         with st.expander("📷 Original scene"):
-            st.image(str(scene_path), use_container_width=True)
+            st.image(str(scene_path), uwidth='stretch')
 
 
 def show_progress():
@@ -270,7 +270,7 @@ def show_options(items: list[dict], retriever: FurnitureRetriever, room: str = D
                 file_name=f"{cat_slug}_{item['furniture_id']}.jpg",
                 mime="image/jpeg",
                 key=f"dl_opt_{item['furniture_id']}",
-                use_container_width=True,
+                width='stretch',
             )
             if st.button("Select", key=f"sel_{item['furniture_id']}"):
                 pick(item, retriever)
@@ -330,7 +330,7 @@ def show_final_room():
                     file_name=f"{cat_slug}.jpg",
                     mime="image/jpeg",
                     key=f"dl_{item['furniture_id']}",
-                    use_container_width=True,
+                    width='stretch',
                 )
 
         st.divider()
@@ -340,7 +340,7 @@ def show_final_room():
             data=collage,
             file_name="room_collage.jpg",
             mime="image/jpeg",
-            use_container_width=True,
+            width='stretch'
         )
     else:
         st.info("You skipped all categories — nothing to show!")

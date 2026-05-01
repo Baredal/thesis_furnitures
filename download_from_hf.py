@@ -1,16 +1,14 @@
 import os
 import shutil
-import tempfile
+import subprocess
 from pathlib import Path
-from huggingface_hub import hf_hub_download, snapshot_download
-from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 HF_USERNAME  = "Darebal"
-MODEL_REPO   = f"{HF_USERNAME}/furniture-compatibility-siamese"
-DATASET_REPO = f"{HF_USERNAME}/furniture-catalog"
+MODEL_REPO   = f"https://huggingface.co/{HF_USERNAME}/furniture-compatibility-siamese"
+DATASET_REPO = f"https://huggingface.co/datasets/{HF_USERNAME}/furniture-catalog"
 
 BASE_DIR = Path(__file__).resolve().parent
-TOKEN    = os.getenv("HF_TOKEN")  # optional — repos are public
+STAGING_DIR = BASE_DIR / "hf_staging"
 
 MODEL_FILES = {
     "bedrooms/best_model_bedrooms.pt":
@@ -56,84 +54,108 @@ TRAINING_FILES = {
         BASE_DIR / "data/ml_data/living_rooms/embeddings/furniture_embeddings.json",
 }
 
+def clone_repos():
+    """Clones the repos via Git LFS into a staging directory."""
+    STAGING_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # 1. Clone Model Repo
+    model_dir = STAGING_DIR / "models_staging"
+    if not model_dir.exists():
+        print(f"\nCloning Model Repository: {MODEL_REPO}...")
+        subprocess.run(["git", "clone", MODEL_REPO, str(model_dir)], check=True)
+    else:
+        print(f"\nModel staging directory already exists. Skipping clone.")
+    
+    # 2. Clone Dataset Repo
+    dataset_dir = STAGING_DIR / "dataset_staging"
+    if not dataset_dir.exists():
+        print(f"\nCloning Dataset Repository: {DATASET_REPO}...")
+        subprocess.run(["git", "clone", DATASET_REPO, str(dataset_dir)], check=True)
+    else:
+        print(f"\nDataset staging directory already exists. Skipping clone.")
 
-def download_models():
-    print(f"Downloading model artefacts from {MODEL_REPO}...")
-    missing = []
+    return model_dir, dataset_dir
+
+def distribute_models(model_dir):
+    print("\nMoving model artefacts...")
     for repo_path, local_path in MODEL_FILES.items():
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        if local_path.exists():
-            print(f"  already exists — skipping: {local_path.name}")
-            continue
-        print(f"  {repo_path}...")
-        try:
-            tmp = hf_hub_download(repo_id=MODEL_REPO, filename=repo_path,
-                                  repo_type="model", token=TOKEN)
-            shutil.copy(tmp, local_path)
-            print(f"    → {local_path}")
-        except EntryNotFoundError:
-            print(f"  WARNING: not found in repo — {repo_path}")
-            missing.append(repo_path)
-    if missing:
-        print("\n  The following files are not yet uploaded to the model repo:")
-        for p in missing:
-            print(f"    {MODEL_REPO}/{p}")
-        print("  Upload them with: huggingface-cli upload or the HuggingFace web UI.")
+        src = model_dir / repo_path
+        if src.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(local_path))
+            print(f"  → Moved to {local_path.name}")
 
+def distribute_training_data(dataset_dir):
+    print("\nMoving training data...")
+    for repo_path, local_path in TRAINING_FILES.items():
+        src = dataset_dir / repo_path
+        if src.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(local_path))
+            print(f"  → Moved to {local_path.name}")
 
-def download_catalog():
-    print(f"\nDownloading furniture catalog images from {DATASET_REPO}...")
+def distribute_scenes(dataset_dir):
+    print("\nMoving scene images...")
+    src = dataset_dir / "scenes"
+    dest = BASE_DIR / "data" / "processed_data"
+    if src.exists():
+        dest.mkdir(parents=True, exist_ok=True)
+        # Move all contents of scenes/ into processed_data/
+        for item in src.iterdir():
+            shutil.move(str(item), str(dest / item.name))
+        print(f"  → Scene images moved to {dest}")
+
+def distribute_catalog(dataset_dir):
+    print("\nMoving furniture catalog images...")
     dest = BASE_DIR / "data" / "total"
     dest.mkdir(parents=True, exist_ok=True)
-    snapshot_download(
-        repo_id=DATASET_REPO,
-        repo_type="dataset",
-        local_dir=str(dest),
-        token=TOKEN,
-        ignore_patterns=[
-            "*.gitattributes", ".gitattributes", "README.md",
-            "*/triplets/*", "*/embeddings/*", "scenes/**",
-        ],
-    )
-    print(f"  Catalog saved to {dest}")
+    
+    # Files and folders to completely ignore
+    ignore_names = {".git", ".gitattributes", "README.md", "scenes", "triplets", "embeddings"}
+    
+    # os.walk goes through every folder and sub-folder perfectly
+    for root, dirs, files in os.walk(dataset_dir):
+        # Modify dirs in-place to skip ignored directories
+        dirs[:] = [d for d in dirs if d not in ignore_names]
+        
+        for file in files:
+            if file in ignore_names:
+                continue
+                
+            # Calculate where the file should go based on its subfolder structure
+            src_path = Path(root) / file
+            rel_path = src_path.relative_to(dataset_dir)
+            dest_path = dest / rel_path
+            
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src_path), str(dest_path))
+            
+    print(f"  → Catalog moved to {dest}")
 
-
-def download_training_data():
-    print(f"\nDownloading training data from {DATASET_REPO}...")
-    for repo_path, local_path in TRAINING_FILES.items():
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        if local_path.exists():
-            print(f"  already exists — skipping: {local_path.name}")
-            continue
-        print(f"  {repo_path}...")
-        tmp = hf_hub_download(repo_id=DATASET_REPO, filename=repo_path,
-                              repo_type="dataset", token=TOKEN)
-        shutil.copy(tmp, local_path)
-        print(f"    → {local_path}")
-
-
-def download_scenes():
-    print(f"\nDownloading scene images from {DATASET_REPO}...")
-    dest = BASE_DIR / "data" / "processed_data"
-    dest.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        snapshot_download(
-            repo_id=DATASET_REPO,
-            repo_type="dataset",
-            local_dir=tmp,
-            token=TOKEN,
-            allow_patterns=["scenes/**"],
-            ignore_patterns=["*.gitattributes", ".gitattributes"],
-        )
-        scenes_root = Path(tmp) / "scenes"
-        if scenes_root.exists():
-            shutil.copytree(str(scenes_root), str(dest), dirs_exist_ok=True)
-    print(f"  Scene images saved to {dest}")
-
+def cleanup():
+    print("\nCleaning up staging directory...")
+    if STAGING_DIR.exists():
+        # Handle read-only files (.git folder issues on Windows)
+        def handle_remove_readonly(func, path, exc):
+            import stat
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(STAGING_DIR, onerror=handle_remove_readonly)
+        print("  → Staging directory removed.")
 
 if __name__ == "__main__":
-    download_models()
-    download_catalog()
-    download_training_data()
-    download_scenes()
+    print("Starting Git LFS bulk download process...")
+    # Make sure we don't need a token variable anymore
+    if "HF_TOKEN" in os.environ:
+        del os.environ["HF_TOKEN"]
+
+    model_dir, dataset_dir = clone_repos()
+    
+    distribute_models(model_dir)
+    distribute_training_data(dataset_dir)
+    distribute_scenes(dataset_dir)
+    distribute_catalog(dataset_dir)
+    
+    cleanup()
+    
     print("\nAll done. Run: streamlit run src/app/streamlit_app.py")
