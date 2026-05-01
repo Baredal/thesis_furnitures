@@ -1,22 +1,3 @@
-"""
-Download all artefacts needed to run the Streamlit app (and optionally retrain)
-from HuggingFace.
-
-Downloads from two repos:
-  - Model repo    → retrieval artefacts (histograms, embeddings, index, model weights)
-  - Dataset repo  → furniture catalog images + manifests
-                    + triplet CSVs (for retraining)
-                    + CLIP embeddings (for re-running build_triplets.py)
-                    + scene images (for "Original scene" expander in the app)
-
-After this script completes, run:
-    streamlit run src/app/streamlit_app.py
-
-Usage:
-    pip install huggingface_hub
-    python download_from_hf.py
-"""
-
 import os
 import shutil
 import tempfile

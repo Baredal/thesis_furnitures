@@ -1,12 +1,3 @@
-"""Evaluate triplet and retrieval metrics on the golden split for both rooms.
-
-Models compared: ResNet18 (ImageNet baseline), EfficientNet-B3 (ImageNet baseline),
-ResNet18 fine-tuned.
-
-Usage:
-    python src/results/evaluate.py
-"""
-
 import csv
 import gc
 import json

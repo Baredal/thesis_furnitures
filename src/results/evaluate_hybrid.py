@@ -1,12 +1,3 @@
-"""Hybrid (embedding + RGB histogram) evaluation on the golden split for both rooms.
-
-Score: EMBED_W * cosine(embedding) + HIST_W * Bhattacharyya(histogram)
-Mirrors FurnitureRetriever default weighting (50/50).
-
-Usage:
-    python src/results/evaluate_hybrid.py
-"""
-
 import csv
 import gc
 import json

@@ -1,12 +1,3 @@
-"""
-EDA script for the thesis — generates tables and figures for both rooms.
-
-Usage:
-    python src/eda/eda.py                    # both rooms (default)
-    python src/eda/eda.py --room bedrooms
-    python src/eda/eda.py --room living_rooms
-"""
-
 import argparse
 import csv
 import json

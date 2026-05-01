@@ -7,8 +7,8 @@ import sys
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(BASE_DIR / "src" / "retrieval"))
-import histogram_filter
+sys.path.insert(0, str(BASE_DIR / "src"))
+from retrieval import histogram_filter
 
 CATEGORY_CHAINS = {
     "bedrooms":     ["bed", "small_storage", "large_storage", "table", "chair_stool", "curtain"],
@@ -17,13 +17,6 @@ CATEGORY_CHAINS = {
 CATEGORY_CHAIN = CATEGORY_CHAINS["bedrooms"]  # backwards-compat alias
 
 class FurnitureRetriever:
-    """
-    Score = embed_weight * cosine(embedding)  +  hist_weight * Bhattacharyya(histogram)
-
-    Returns plain dicts:
-        furniture_id, category, source, scene, image_name, image_path,
-        score, embed_score, hist_score
-    """
 
     def __init__(self, room="bedrooms", embed_weight: float = 0.5, hist_weight: float = 0.5):
         self.room = room

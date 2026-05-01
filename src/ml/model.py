@@ -26,11 +26,7 @@ def _make_embedding_head(in_features, embedding_dim, dropout=0.0):
 
 
 def freeze_early_layers(backbone, prefixes=("0", "1", "2", "3", "4")):
-    """
-    Freeze layers in an nn.Sequential backbone by index prefix.
-    For ResNet wrapped as Sequential(*children()[:-1]):
-      index 0 = conv1, 1 = bn1, 2 = relu, 3 = maxpool, 4 = layer1, 5 = layer2
-    """
+    # ResNet as Sequential: 0=conv1, 1=bn1, 2=relu, 3=maxpool, 4=layer1, 5=layer2
     frozen = []
     for name, param in backbone.named_parameters():
         top_level = name.split(".")[0]

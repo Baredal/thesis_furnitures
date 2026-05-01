@@ -1,28 +1,3 @@
-"""
-Triplet construction for furniture compatibility training.
-
-Triplet structure:
-  Anchor:   item from a scene
-  Positive: different-category item from the SAME scene
-  Negative: same category as positive, from a DIFFERENT scene,
-            scored by dual cosine-distance criterion
-
-Negative scoring:
-  combined = cos_dist(positive, negative)
-           + cos_dist(anchor, closest_anchor-cat_item_in_neg_scene)
-  Selected from [50th, 95th] percentile — moderately hard, no extreme outliers.
-  5 negatives per anchor-positive pair, balanced across source scenes.
-
-Pair deduplication: canonical category ordering so (bed, nightstand) and
-(nightstand, bed) are the same pair. Cross-scene duplicates removed.
-
-Scene split: golden/train/val (18% / ~70% / 12%), balanced per source.
-Golden set is reserved for final evaluation — never used during training.
-
-Usage:
-  python src/ml/build_triplets.py
-"""
-
 import json
 import sys
 import csv
@@ -68,12 +43,7 @@ def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def load_embeddings(path: Path):
-    """
-    Load furniture embeddings JSON. The same furniture_id can appear in multiple scenes —
-    kept once with all scene membership tracked in item["scenes"].
-
-    Returns: all_items (id→dict), scene_to_items (scene→list), category_to_items (cat→list)
-    """
+    # one entry per furniture_id; multi-scene membership tracked in item["scenes"]
     print(f"  Reading {path.name} ...")
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)
@@ -122,11 +92,6 @@ def _scene_source(scene_name: str) -> str:
 
 
 def generate_pairs(scene_to_items: dict, eligible_scenes: set):
-    """
-    Enumerate all cross-category item pairs within each eligible scene.
-    Canonical ordering (anchor_cat < positive_cat alphabetically) deduplicates
-    reversed pairs. Same item pair co-occurring in multiple scenes is kept once.
-    """
     pairs = []
     seen: set[tuple[str, str]] = set()
     same_cat_skipped = 0
@@ -168,15 +133,6 @@ def select_negatives(
     pctile_high: int,
     seed: int,
 ):
-    """
-    For each (anchor, positive) pair, select up to num_negatives negatives.
-
-    Scoring:
-      combined = cos_dist(positive, negative)
-               + cos_dist(anchor, closest_same-cat_item_in_neg_scene)
-    Selection window: [pctile_low, pctile_high] of sorted combined scores.
-    Balance: per-scene quota prevents any single scene from dominating.
-    """
     rng = random.Random(seed)
 
     # fast lookup: scene → category → items
@@ -322,7 +278,6 @@ def select_negatives(
 
 
 def export_embedding_matrix(all_items: dict, output_dir: Path):
-    """Export embeddings as .npz matrix + JSON id→index mapping."""
     output_dir.mkdir(parents=True, exist_ok=True)
     furn_ids = sorted(all_items.keys())
     id_to_idx = {fid: i for i, fid in enumerate(furn_ids)}
@@ -343,7 +298,6 @@ def export_embedding_matrix(all_items: dict, output_dir: Path):
 
 
 def export_triplet_npy(triplets: list[dict], all_items: dict, output_path: Path):
-    """Save triplets as (T, 3) int32 array of embedding-matrix row indices."""
     furn_ids = sorted(all_items.keys())
     id_to_idx = {fid: i for i, fid in enumerate(furn_ids)}
 
@@ -361,11 +315,6 @@ _SPLIT_COLORS = {"train": "#4c72b0", "val": "#55a868", "golden": "#c44e52"}
 
 
 def split_golden_train_val(scene_to_items, golden_frac, val_frac, seed):
-    """
-    Three-way scene-level split, balanced per source.
-    golden_frac of each source goes to golden first, then val_frac of the remainder.
-    Returns (golden_scenes, train_scenes, val_scenes).
-    """
     rng = random.Random(seed)
 
     groups: dict[tuple[str, frozenset], list[str]] = defaultdict(list)

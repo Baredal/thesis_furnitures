@@ -64,17 +64,64 @@ The following are included for **methodology documentation**, but require access
 
 ```
 src/
-  app/                    Streamlit retrieval app
-  data_processing/        Per-source preprocessing notebooks (DeepFurn, Sklad Mebliv, Wayfair)
-  eda/                    Exploratory data analysis script
-  ml/                     Model definition, triplet builders, training notebook
-  retrieval/              Embedding generation, retrieval logic, histogram filter
-  results/                Evaluation scripts, result JSONs, and figures
-  visualization/          Thesis figure notebooks
+  app/
+    streamlit_app.py              Interactive room-building demo — main entry point
+
+  data_processing/
+    deepfurn/
+      process_annotations.ipynb   Normalise DeepFurniture bounding-box annotations
+                                  into the unified scene format
+      [other notebooks]           Scene extraction scripts — not included (see note above)
+    sklad_mebliv/
+      download_data.ipynb         Scrape Sklad Mebliv product pages
+      parse_data.py / .ipynb      Parse HTML → per-item annotation JSON
+      preprocess_data.ipynb       Crop furniture images; map Ukrainian labels to categories
+      process_annotation.ipynb    Final normalisation to unified scene format
+    total/
+      move_analyse_transform.ipynb  Merge all sources → data/total/{room}/general_manifest.json
+      normalize_images.py           Resize and standardise catalog images
+    wayfair/
+      process_annotation.ipynb    Annotation processing (source dropped — reference only)
+
+  eda/
+    eda.py                        Figures + tables: item counts, scene sizes, split
+                                  breakdown, category-pair heatmap, distance distributions
+
+  ml/
+    model.py                      SiameseResNet18 and variants (ResNet34/50, EfficientNet
+                                  B0–B7); shared embedding head architecture
+    build_triplets.py             Mine anchor/positive/negative triplets from embeddings;
+                                  produce golden/train/val scene split
+    embeddings_for_training.ipynb Extract ResNet50 (ImageNet V2) features for negative
+                                  mining — prerequisite for build_triplets.py
+    train.ipynb                   Fine-tune SiameseResNet18 with triplet margin loss;
+                                  W&B experiment tracking
+
+  retrieval/
+    retrieval_logic.py            FurnitureRetriever class — hybrid embedding + colour
+                                  scorer with recency-weighted multi-item aggregation
+    histogram_filter.py           RGB histogram (32 bins/channel); sqrt-encodes so
+                                  Bhattacharyya coefficient = dot product
+    make_embeddings.py            Encode full catalog → retrieval_embeddings.npz,
+                                  retrieval_index.json, retrieval_histograms_bc.npz
+
+  results/
+    evaluate.py                   Triplet accuracy, MRR, Scene R@K, Compat P/R@K
+                                  on the golden set (embedding-only scorer)
+    evaluate_hybrid.py            Same metrics with the hybrid scorer
+    {room}_results.json           Pre-computed evaluation results (embedding-only)
+    {room}_results_hybrid.json    Pre-computed evaluation results (hybrid)
+    *.png                         Precision/recall and distance-distribution plots
+
+  visualization/
+    fig1_grid.ipynb – fig5_weights.ipynb  Thesis figure notebooks
+    comparison_visualization.ipynb        Side-by-side model comparison figures
+
 data/
   eda_output/             Pre-generated EDA figures and summary tables
-  w_b_runs/               W&B run artifacts for the training runs (bedrooms + living rooms)
-download_from_hf.py       Downloads all model + dataset artifacts from HuggingFace
+  w_b_runs/               W&B run artifacts for both room types
+
+download_from_hf.py       Download models + dataset from HuggingFace
 requirements.txt
 ```
 
