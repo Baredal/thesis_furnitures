@@ -40,8 +40,8 @@ PR_K           = [1, 3, 5, 10, 15, 20, 30, 50]
 ROOMS = ["bedrooms", "living_rooms"]
 
 CHECKPOINTS = {
-    "bedrooms":     "v3/best_model_v3_resnet18_new_data.pt",
-    "living_rooms": "v3/best_model_v3_resnet18_liv_rooms.pt",
+    "bedrooms":     "best_model_bedrooms.pt",
+    "living_rooms": "best_model_liv_rooms.pt",
 }
 
 COLORS = {

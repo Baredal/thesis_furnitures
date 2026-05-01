@@ -13,8 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent
 TOKEN    = os.getenv("HF_TOKEN")  # optional — repos are public
 
 MODEL_FILES = {
-    "bedrooms/best_model.pt":
-        BASE_DIR / "data/ml_data/bedrooms/models/v3/best_model_v3_resnet18_new_data.pt",
+    "bedrooms/best_model_bedrooms.pt":
+        BASE_DIR / "data/ml_data/bedrooms/models/best_model_bedrooms.pt",
     "bedrooms/retrieval_embeddings.npz":
         BASE_DIR / "data/retrieval_data/bedrooms/retrieval_embeddings.npz",
     "bedrooms/retrieval_index.json":
@@ -22,8 +22,8 @@ MODEL_FILES = {
     "bedrooms/retrieval_histograms_bc.npz":
         BASE_DIR / "data/retrieval_data/bedrooms/retrieval_histograms_bc.npz",
 
-    "living_rooms/best_model.pt":
-        BASE_DIR / "data/ml_data/living_rooms/models/v3/best_model_v3_resnet18_liv_rooms.pt",
+    "living_rooms/best_model_liv_rooms.pt":
+        BASE_DIR / "data/ml_data/living_rooms/models/best_model_liv_rooms.pt",
     "living_rooms/retrieval_embeddings.npz":
         BASE_DIR / "data/retrieval_data/living_rooms/retrieval_embeddings.npz",
     "living_rooms/retrieval_index.json":

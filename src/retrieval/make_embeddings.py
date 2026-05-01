@@ -17,8 +17,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ROOMS_TO_PROCESS = ["bedrooms", "living_rooms"]
 
 CHECKPOINT_NAMES = {
-    "bedrooms":     "v3/best_model_v3_resnet18_new_data.pt",
-    "living_rooms": "v3/best_model_v3_resnet18_liv_rooms.pt",
+    "bedrooms":     "best_model_bedrooms.pt",
+    "living_rooms": "best_model_liv_rooms.pt",
 }
 
 def build_href_map(room) -> dict[str, str]:

@@ -53,8 +53,8 @@ class FurnitureRetriever:
             print(f"  {cat:15s}: {len(self._category_rows[cat])} items")
 
     _CKPT_NAMES = {
-        "bedrooms":     "v3/best_model_v3_resnet18_new_data.pt",
-        "living_rooms": "v3/best_model_v3_resnet18_liv_rooms.pt",
+        "bedrooms":     "best_model_bedrooms.pt",
+        "living_rooms": "best_model_liv_rooms.pt",
     }
 
     def _load_embed_model(self):
