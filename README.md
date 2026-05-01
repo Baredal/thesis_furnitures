@@ -23,7 +23,7 @@ The Streamlit app guides a user through assembling a room step by step.
 3. **Step through the chain** — for bedrooms the order is bed → small storage → large storage → table → chair/stool → curtain; for living rooms it is sofa → table → small storage → large storage → chair/stool → curtain.
 4. **Pick or skip** — at each step five compatible candidates are shown, scored by the hybrid retriever. You can select one, skip the category, or shuffle for five more options.
 5. **Adjust the scoring weight** — a sidebar slider lets you move between "style" (embedding-dominated) and "colour" (histogram-dominated) scoring in real time.
-6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available) and can be reverse-searched via Google Lens. A collage of all selected items can be downloaded as a single JPEG.
+6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available). A collage of all selected items can be downloaded as a single JPEG.
 
 ---
 
@@ -260,11 +260,13 @@ python src/results/evaluate.py
 python src/results/evaluate_hybrid.py
 ```
 
-To reproduce from proccessed data creaation triplets (requires processed data), additionally run:
+To reproduce from proccessed data creation triplets (requires processed data), additionally run:
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction for negative mining
 - Per-source notebooks in `src/data_processing/`
+- [Kaggle processed data](https://www.kaggle.com/datasets/darebal/furnishings-dataset)
+- You will have to download, unarchive and move **processed_data** into **data/** folder
 
-Processed is standardised into a unified directory structure, regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
+Processed is standardised into a unified directory structure regardless of its original source (e.g., DeepFurniture or Sklad Mebliv) or room type. The directory hierarchy for a processed scene looks like this:
 
 ```text
 processed_data/
