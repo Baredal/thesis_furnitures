@@ -20,7 +20,7 @@ The Streamlit app guides a user through assembling a room step by step.
 
 1. **Choose room type** — bedrooms or living rooms.
 2. **Optional anchor photo** — upload your own furniture photo at step 0. The model embeds it on the fly and uses it as the starting point for all subsequent recommendations.
-3. **Step through the chain** — for bedrooms the order is bed → small storage → large storage → table → chair/stool → curtain; for living rooms it is sofa → table → small storage → large storage → chair/stool → curtain.
+3. **Step through the chain** — for bedrooms the order is bed → storage 1 → storage 2 → table → chair/stool → curtain; for living rooms it is sofa → table → storage 1 → storage 2 → chair/stool → curtain.
 4. **Pick or skip** — at each step five compatible candidates are shown, scored by the hybrid retriever. You can select one, skip the category, or shuffle for five more options.
 5. **Adjust the scoring weight** — a sidebar slider lets you move between "style" (embedding-dominated) and "colour" (histogram-dominated) scoring in real time.
 6. **Final room view** — all selected items are displayed together. Each item links to its original product page (where available). A collage of all selected items can be downloaded as a single JPEG.
@@ -40,15 +40,15 @@ After running `download_from_hf.py` the following work fully:
 The following are included for **methodology documentation**, but require access to the original raw data sources and will not run out of the box:
 
 - `src/data_processing/sklad_mebliv/` — scraping and preprocessing for the Sklad Mebliv Ukrainian retailer: downloading product pages, parsing annotations, and normalising into the unified scene format
-- `src/data_processing/deepfurn/process_annotations.ipynb` — annotation processing for DeepFurniture; the furniture bounding-box cropping and image collection scripts are **not included** — they operate on the raw DeepFurniture source files and would not be meaningful without the full original dataset from [byliu/DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture)
+- `src/data_processing/deepfurn/process_annotations.ipynb` — annotation processing for DeepFurniture; [byliu/DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture)
 - `src/data_processing/total/` — merging all sources into the unified catalog with `general_manifest.json`
 - `src/ml/embeddings_for_training.ipynb` — ResNet50 embedding extraction over raw furniture images (prerequisite for triplet mining from scratch)
 - `src/ml/build_triplets.py` — triplet construction from scratch (ready CSVs are downloadable from HuggingFace)
 - `src/visualization/` — notebooks used to generate thesis figures
 
-**Note on data processing completeness:** In the case of DeepFurniture, not all scripts for extracting furniture and collecting images are included, and not all of them correspond 100% to the final dataset. This stage depends on the source files, and recreating them requires access to the raw datasets, which are very large. Additionally, the final dataset was compiled over many attempts, relabeled, and tested, which took a significant amount of time. Overall, the process involved searching the code for scenes with the appropriate number of furniture items (excluding trash), extracting scenes, relabeling, and unifying them for the training dataset.
+**Note on data processing:** In the case of DeepFurniture, only main scripts for extracting furniture shown as logic, and not all of them correspond 100% to the final dataset. This stage depends on the source files, and recreating them requires access to the raw datasets, which are very large. Additionally, the final dataset was compiled over many attempts, relabeled, and tested, which took a significant amount of time. Overall, the process involved searching the code for scenes with the appropriate number of furniture items (excluding trash), extracting scenes, relabeling, and unifying them for the training dataset.
 
-**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. Wayfair was explored as a third data source early in the project but was ultimately dropped — the data proved difficult to normalise consistently. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
+**Note on Wayfair:** `src/data_processing/wayfair/process_annotation.ipynb` is included for transparency. There were a lot of scripts and notebooks for parsing, collecting, labeling, training on Wayfair data and it was explored as a third data source early in the project but was dropped because the data proved difficult to normalise consistently and with good quality. A lot of time were spent on researching it. No Wayfair images or annotations appear in the final dataset, trained models, or any results.
 
 ---
 
@@ -63,7 +63,7 @@ src/
     deepfurn/
       process_annotations.ipynb   Normalise DeepFurniture bounding-box annotations
                                   into the unified scene format
-      [other notebooks]           Scene extraction scripts — not included (see note above)
+      [other notebooks]           Scene extraction scripts — (see note above)
     sklad_mebliv/
       download_data.ipynb         Scrape Sklad Mebliv product pages
       parse_data.py / .ipynb      Parse HTML → per-item annotation JSON
@@ -141,7 +141,7 @@ Two room types are covered: **bedrooms** and **living rooms**.
 
 | Source | Rooms | Scenes |
 |---|---|---|
-| [DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture) | bedrooms + living rooms | 801 per room type |
+| [DeepFurniture](https://huggingface.co/datasets/byliu/DeepFurniture) | bedrooms + living rooms | 800 per room type |
 | Sklad Mebliv (Ukrainian online retailer) | bedrooms only | 73 |
 
 DeepFurniture provides real interior photographs with bounding-box annotations for individual furniture items. Sklad Mebliv scenes were scraped from product pages; each page groups several items from the same collection, which serves as a proxy for compatibility.
@@ -215,7 +215,7 @@ score = embed_weight × cosine_sim(embedding_query, embedding_candidate)
 - **Embedding similarity** uses the fine-tuned ResNet18 output (128-dim, L2-normalised). High similarity means the model learned that these item styles co-occur in real rooms.
 - **Bhattacharyya coefficient** is computed over RGB histograms (32 bins per channel, sqrt-normalised so the coefficient equals the dot product). High coefficient means similar dominant colours.
 - When multiple items have already been selected, their scores are aggregated with a **recency bias**: the most recently chosen item is weighted 1.0, older items linearly down to 0.3. This lets the chain build coherently around the latest selection.
-- The user controls `embed_weight` / `hist_weight` (sum = 1.0) via a sidebar slider. Default is 0.8 / 0.2 — style-dominant with a small colour correction.
+- The user controls `embed_weight` / `hist_weight` (sum = 1.0) via a sidebar slider. Default is 0.8 / 0.2 — shape-geometry-style-dominant with a small colour correction.
 
 ---
 
